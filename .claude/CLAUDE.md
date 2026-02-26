@@ -1,7 +1,7 @@
 # Olympia Treasury Contract
 
 ## Project Description
-ETC Olympia hard fork treasury vault (ECIP-1112). Receives basefee revenue from EIP-1559 via state credit and provides role-gated withdrawal via OpenZeppelin AccessControl. Staged governance — admin EOA now, futarchy DAO later.
+ETC Olympia hard fork treasury vault (ECIP-1112). Built on OpenZeppelin AccessControl (ECIP-1113). Receives basefee revenue from EIP-1559 via state credit (ECIP-1111) and provides role-gated withdrawal. Staged governance — admin EOA now, futarchy DAO (ECIP-1117) later.
 
 ## Tech Stack
 - Solidity 0.8.28
