@@ -2,15 +2,18 @@
 cache/
 out/
 
-# Ignores development broadcast logs
-!/broadcast
-/broadcast/*/31337/
+# Broadcast dry-runs and local devnet logs
 /broadcast/**/dry-run/
+/broadcast/*/31337/
+
+# Keep real deployment logs (Mordor chain 63, ETC mainnet chain 61)
+# broadcast/Deploy.s.sol/63/ — committed
+# broadcast/Deploy.s.sol/61/ — committed when deployed
 
 # Docs
 docs/
 
-# Environment
+# Environment (contains private keys)
 .env
 .env.*
 !.env.example
@@ -22,3 +25,7 @@ docs/
 SESSION_NOTES.md
 PLANNING.md
 SCRATCH.md
+
+# OS
+.DS_Store
+Thumbs.db
