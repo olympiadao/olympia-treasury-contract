@@ -49,7 +49,7 @@ The Olympia hard fork activates [EIP-1559](https://eips.ethereum.org/EIPS/eip-15
 
 Each block, core-geth's `Finalize()` function credits `baseFee × gasUsed` directly to the treasury contract's balance. This is a **state credit**, not an on-chain transaction — there is no gas cost and no transaction appears in the block. Revenue scales with network usage: more transactions means higher basefee and more gas consumed.
 
-This mechanism works identically for both **Type-0 (legacy)** and **Type-2 (EIP-1559)** transactions. Legacy transactions pay `gasPrice = baseFee + tip`, so the basefee portion still flows to the treasury regardless of which transaction type users adopt.
+This mechanism works identically for both **Type-0 (legacy)** and **Type-2 (EIP-1559)** transactions. The basefee is a **block-level** parameter set by the protocol, not a transaction field. Legacy transactions set a single `gasPrice` which must be ≥ the block's `baseFee` to be valid — the protocol implicitly decomposes it as `effective_tip = gasPrice − baseFee`. The basefee portion flows to the treasury regardless of which transaction type users adopt.
 
 ### The Contract: A Role-Gated Vault
 
@@ -271,23 +271,27 @@ All three are independent `WITHDRAWER_ROLE` holders.
 
 **DAO Contract Migration** — When a DAO needs upgrading (e.g., OZ v5 → v6), the existing DAO (as admin) can authorize its own succession: grant roles to the new DAO, transfer `DEFAULT_ADMIN_ROLE`, then the new DAO revokes the old one's access. Zero downtime, zero fund loss, treasury address unchanged.
 
-**Legacy Transaction Adoption** — The EIP-1559 basefee mechanism works identically for all transaction types. Legacy transactions pay `gasPrice = baseFee + tip`, so `baseFee × gasUsed` flows to the treasury regardless of whether users adopt Type-2 transactions.
+**Legacy Transaction Adoption** — The basefee is a block-level parameter set by the protocol, not a transaction field. Legacy transactions set a single `gasPrice` which must be ≥ the block's `baseFee` — the protocol implicitly decomposes it as `effective_tip = gasPrice − baseFee`. The basefee portion (`baseFee × gasUsed`) flows to the treasury regardless of which transaction type users adopt.
 
-### Pattern: PaymentSplitter for Fixed Splits
+### Pattern: Treasury Distributor for Fixed Splits
 
-When multiple DAOs share treasury access (Stages 3-4), percentage splits can be enforced using a **PaymentSplitter** contract positioned between the treasury and the DAOs:
+When multiple DAOs share treasury access (Stages 3-4), percentage splits can be enforced using a custom **TreasuryDistributor** contract positioned between the treasury and the DAOs. A standard PaymentSplitter (like OZ's v4 implementation) won't work here — PaymentSplitter is a passive recipient that only has `receive()` and `release()`. It cannot actively call `withdraw()` on the treasury to pull funds in.
+
+The distributor needs two capabilities: **active withdrawal** from the treasury and **proportional distribution** to payees.
 
 ```
-Treasury ──withdraw──▶ PaymentSplitter ──release()──▶ CoreDAO (40%)
-         (WITHDRAWER)                  ──release()──▶ FutarchyDAO (30%)
-                                       ──release()──▶ LCurveDistributor (30%)
+                          drip()                         release()
+Treasury ◀──withdraw()── TreasuryDistributor ──────────▶ CoreDAO (40%)
+                         (holds WITHDRAWER_ROLE)  ─────▶ FutarchyDAO (30%)
+                         shares: [40, 30, 30]     ─────▶ LCurveDistributor (30%)
 ```
 
-The PaymentSplitter holds `WITHDRAWER_ROLE` on the treasury. A periodic "drip" call withdraws funds from the treasury into the splitter. Each DAO calls `release()` to pull its proportional share — a [pull-payment model](https://docs.openzeppelin.com/contracts/5.x/api/utils#Address) where recipients claim rather than receiving pushes.
+1. **`drip()`** — Anyone can call this. It calls `treasury.withdraw(address(this), amount)` to pull funds into the distributor. Permissionless because it only moves funds from treasury → distributor (no extraction risk).
+2. **`release(address payee)`** — Each DAO calls this to claim its proportional share. Uses pull-payment accounting: `owed = (totalReceived × payeeShares / totalShares) − alreadyReleased[payee]`.
 
-This abstracts percentage logic **outside** the treasury contract, keeping the treasury's role model clean: one `WITHDRAWER_ROLE` holder (the splitter) instead of three.
+This abstracts percentage logic **outside** the treasury contract, keeping the treasury's role model clean: one `WITHDRAWER_ROLE` holder (the distributor) instead of three.
 
-> **Note:** OpenZeppelin [removed PaymentSplitter in v5.0.0](https://github.com/OpenZeppelin/openzeppelin-contracts/pull/4276). A custom implementation based on the [v4 PaymentSplitter](https://docs.openzeppelin.com/contracts/4.x/api/finance#PaymentSplitter) pattern (~50 lines) would be needed. The core math is straightforward: `payee_share = (total_received × payee_shares) / total_shares - already_released`.
+> **Note:** This is a custom contract (~80 lines), not a drop-in OZ component. OpenZeppelin [removed PaymentSplitter in v5.0.0](https://github.com/OpenZeppelin/openzeppelin-contracts/pull/4276), but the [v4 PaymentSplitter](https://docs.openzeppelin.com/contracts/4.x/api/finance#PaymentSplitter) share accounting math is a useful reference for the `release()` logic.
 
 ## Deployments
 
