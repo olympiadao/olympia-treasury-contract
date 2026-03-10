@@ -396,3 +396,4 @@ After deployment, update `OlympiaTreasuryAddress` in `core-geth/params/config_mo
 | [ECIP-1118](https://ecips.ethereumclassic.org/ECIPs/ecip-1118) | Futarchy Funding & Disbursement | Draft |
 | [ECIP-1119](https://ecips.ethereumclassic.org/ECIPs/ecip-1119) | Sanctions Constraint | Draft |
 | [ECIP-1121](https://ecips.ethereumclassic.org/ECIPs/ecip-1121) | Execution Client Alignment | Implemented (3 clients) |
+| [ECIP-1122](https://ecips.ethereumclassic.org/ECIPs/ecip-1122) | Protocol-Native Miner Distribution | Draft |
