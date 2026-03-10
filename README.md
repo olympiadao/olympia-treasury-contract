@@ -26,7 +26,7 @@ Immutable treasury vault for the ETC Olympia hard fork. Built on **OpenZeppelin 
 ┌─────────────────────────────────────────────┐
 │  OlympiaTreasury (this contract)            │
 │                                             │
-│  OpenZeppelin AccessControl (ECIP-1113)     │
+│  AccessControlDefaultAdminRules (ECIP-1113) │
 │  ├─ DEFAULT_ADMIN_ROLE  → manages roles     │
 │  ├─ WITHDRAWER_ROLE     → withdraw(to, amt) │
 │  └─ receive()           → accept ETC        │
@@ -82,7 +82,7 @@ If any step fails, the entire call reverts with a descriptive error:
 
 ## OpenZeppelin Framework (ECIP-1113)
 
-The treasury uses OpenZeppelin's **AccessControl** for role-based permissioning. This is the standard pattern for staged governance — deploy with admin control now, delegate to a DAO later without redeploying.
+The treasury uses OpenZeppelin's **AccessControlDefaultAdminRules** for role-based permissioning with a mandatory 2-step admin transfer and configurable delay (600s for demo v0.1). This is the standard pattern for staged governance — deploy with admin control now, delegate to a DAO later without redeploying.
 
 ### Roles
 
@@ -91,8 +91,10 @@ The treasury uses OpenZeppelin's **AccessControl** for role-based permissioning.
 | `DEFAULT_ADMIN_ROLE` | Grant/revoke all roles | Deployer EOA |
 | `WITHDRAWER_ROLE` | Call `withdraw(to, amount)` | Deployer EOA |
 
-### Why AccessControl (not Ownable)
+### Why AccessControlDefaultAdminRules
 
+- **2-step admin transfer**: Prevents accidental or malicious admin transfers — new admin must explicitly accept
+- **Configurable delay**: 600s window between initiating and accepting admin transfer (production would use longer)
 - **Multi-role**: Separate admin (role management) from withdrawer (spending)
 - **Composable**: Grant `WITHDRAWER_ROLE` to any address — EOA, multisig, or DAO contract
 - **Revocable**: Admin can revoke roles without redeployment
@@ -364,7 +366,7 @@ After deployment, update `OlympiaTreasuryAddress` in `core-geth/params/config_mo
 | `src/OlympiaTreasury.sol` | Treasury vault — AccessControl + withdraw + receive |
 | `test/OlympiaTreasury.t.sol` | 10 unit tests |
 | `test/StagedEvolution.t.sol` | 6 integration tests (4 governance stages + 2 edge cases) |
-| `test/SecurityInvariants.t.sol` | 17 security proofs (immutability, reentrancy, access control, fuzz) |
+| `test/SecurityInvariants.t.sol` | 22 security proofs (immutability, reentrancy, access control, 2-step admin, fuzz) |
 | `test/mocks/MockCoreDAO.sol` | Simulates ECIP-1113 traditional DAO governance |
 | `test/mocks/MockFutarchyDAO.sol` | Simulates ECIP-1117 futarchy prediction market DAO |
 | `test/mocks/MockLCurveDistributor.sol` | Simulates ECIP-1115 L-curve miner distribution |
@@ -384,7 +386,7 @@ After deployment, update `OlympiaTreasuryAddress` in `core-geth/params/config_mo
 
 | ECIP | Title | Status |
 |------|-------|--------|
-| [ECIP-1111](https://ecips.ethereumclassic.org/ECIPs/ecip-1111) | Olympia Base Fee Market | Implemented in core-geth |
+| [ECIP-1111](https://ecips.ethereumclassic.org/ECIPs/ecip-1111) | Olympia Base Fee Market | Implemented (3 clients) |
 | [ECIP-1112](https://ecips.ethereumclassic.org/ECIPs/ecip-1112) | Olympia Treasury Contract | **This repo** |
 | [ECIP-1113](https://ecips.ethereumclassic.org/ECIPs/ecip-1113) | DAO Governance Framework | Draft |
 | [ECIP-1114](https://ecips.ethereumclassic.org/ECIPs/ecip-1114) | ECFP Funding Process | Draft |
@@ -393,4 +395,4 @@ After deployment, update `OlympiaTreasuryAddress` in `core-geth/params/config_mo
 | [ECIP-1117](https://ecips.ethereumclassic.org/ECIPs/ecip-1117) | Futarchy Governance | Draft |
 | [ECIP-1118](https://ecips.ethereumclassic.org/ECIPs/ecip-1118) | Futarchy Funding & Disbursement | Draft |
 | [ECIP-1119](https://ecips.ethereumclassic.org/ECIPs/ecip-1119) | Sanctions Constraint | Draft |
-| [ECIP-1121](https://ecips.ethereumclassic.org/ECIPs/ecip-1121) | Execution Client Alignment | Implemented in core-geth |
+| [ECIP-1121](https://ecips.ethereumclassic.org/ECIPs/ecip-1121) | Execution Client Alignment | Implemented (3 clients) |
