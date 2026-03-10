@@ -50,13 +50,16 @@ contract MockCoreDAO {
         emit PipelineDisabled(pipeline, reason);
     }
 
-    /// @notice Transfer DEFAULT_ADMIN_ROLE to a successor DAO contract.
-    ///         This is the key operation for DAO migration — the old DAO
-    ///         authorizes the new one, then renounces its own admin role.
+    /// @notice Begin 2-step admin transfer to a successor DAO contract.
+    ///         The successor must call treasury.acceptDefaultAdminTransfer()
+    ///         after the admin delay has elapsed.
     /// @param successor Address of the new DAO that will become admin.
     function transferAdminTo(address successor) external {
-        bytes32 adminRole = treasury.DEFAULT_ADMIN_ROLE();
-        treasury.grantRole(adminRole, successor);
-        treasury.renounceRole(adminRole, address(this));
+        treasury.beginDefaultAdminTransfer(successor);
+    }
+
+    /// @notice Accept a pending admin transfer (called by the new admin).
+    function acceptAdminTransfer() external {
+        treasury.acceptDefaultAdminTransfer();
     }
 }

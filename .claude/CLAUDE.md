@@ -35,7 +35,7 @@ broadcast/Deploy.s.sol/63/   # Mordor deployment logs
 ```
 
 ## Deployments
-- **Mordor:** `0xCfE1e0ECbff745e6c800fF980178a8dDEf94bEe2`
+- **Mordor:** `0xd6165F3aF4281037bce810621F62B43077Fb0e37`
 - **ETC mainnet:** Not yet deployed
 
 ## Boundaries

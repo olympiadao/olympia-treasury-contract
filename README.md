@@ -145,7 +145,7 @@ See [OpenZeppelin AccessControl docs](https://docs.openzeppelin.com/contracts/5.
 All examples use Foundry's `cast` CLI. Set these environment variables first:
 
 ```bash
-export TREASURY=0xCfE1e0ECbff745e6c800fF980178a8dDEf94bEe2
+export TREASURY=0xd6165F3aF4281037bce810621F62B43077Fb0e37
 export RPC=http://localhost:8545  # Mordor local node
 ```
 
@@ -297,7 +297,7 @@ This abstracts percentage logic **outside** the treasury contract, keeping the t
 
 | Chain | Address | Block |
 |-------|---------|-------|
-| Mordor (63) | `0xCfE1e0ECbff745e6c800fF980178a8dDEf94bEe2` | [Deployed](broadcast/Deploy.s.sol/63/) |
+| Mordor (63) | `0xd6165F3aF4281037bce810621F62B43077Fb0e37` | [Deployed](broadcast/Deploy.s.sol/63/) |
 | ETC Mainnet (61) | — | Pending Olympia activation |
 
 CREATE2 salt (`keccak256("OLYMPIA_TREASURY_V1")`) ensures deterministic addresses across chains given the same deployer.

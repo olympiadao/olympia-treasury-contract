@@ -12,7 +12,7 @@ contract OlympiaTreasuryTest is Test {
     address nobody = makeAddr("nobody");
 
     function setUp() public {
-        treasury = new OlympiaTreasury(admin);
+        treasury = new OlympiaTreasury(600, admin);
         // Fund the treasury (simulates basefee state credits)
         vm.deal(address(treasury), 100 ether);
     }

@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {OlympiaTreasury} from "../src/OlympiaTreasury.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {IAccessControlDefaultAdminRules} from
+    "@openzeppelin/contracts/access/extensions/IAccessControlDefaultAdminRules.sol";
 
 /// @title SecurityInvariants
 /// @notice Proves the OlympiaTreasury contract is immutable, safe from unauthorized
@@ -19,8 +21,11 @@ contract SecurityInvariantsTest is Test {
     bytes32 constant WITHDRAWER_ROLE = keccak256("WITHDRAWER_ROLE");
     bytes32 constant DEFAULT_ADMIN_ROLE = 0x00;
 
+    // Admin transfer delay for demo (10 minutes)
+    uint48 constant ADMIN_DELAY = 600;
+
     function setUp() public {
-        treasury = new OlympiaTreasury(admin);
+        treasury = new OlympiaTreasury(ADMIN_DELAY, admin);
         vm.deal(address(treasury), 100 ether);
     }
 
@@ -29,14 +34,11 @@ contract SecurityInvariantsTest is Test {
     // ──────────────────────────────────────────────────────────────────
 
     /// @notice Verify deployed bytecode contains no SELFDESTRUCT (0xFF) opcode.
-    ///         This proves the contract cannot be destroyed after deployment.
     function test_NoSelfdestructOpcode() public view {
         bytes memory code = address(treasury).code;
         for (uint256 i = 0; i < code.length; i++) {
-            // SELFDESTRUCT = 0xFF. Skip PUSH data by advancing past push operands.
             uint8 op = uint8(code[i]);
             if (op >= 0x60 && op <= 0x7F) {
-                // PUSH1-PUSH32: skip the next (op - 0x5F) bytes (immediate data)
                 i += (op - 0x5F);
                 continue;
             }
@@ -45,7 +47,6 @@ contract SecurityInvariantsTest is Test {
     }
 
     /// @notice Verify deployed bytecode contains no DELEGATECALL (0xF4) opcode.
-    ///         This proves the contract cannot execute arbitrary external code.
     function test_NoDelegatecallOpcode() public view {
         bytes memory code = address(treasury).code;
         for (uint256 i = 0; i < code.length; i++) {
@@ -59,8 +60,6 @@ contract SecurityInvariantsTest is Test {
     }
 
     /// @notice Verify no EIP-1967 proxy storage slot exists.
-    ///         Slot 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc
-    ///         is the standard implementation slot for UUPS/TransparentProxy.
     function test_NoProxyStorageSlot() public view {
         bytes32 proxySlot = bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
         bytes32 value = vm.load(address(treasury), proxySlot);
@@ -71,6 +70,8 @@ contract SecurityInvariantsTest is Test {
     function test_ERC165InterfaceSupport() public view {
         // Must support IAccessControl
         assertTrue(treasury.supportsInterface(type(IAccessControl).interfaceId));
+        // Must support IAccessControlDefaultAdminRules
+        assertTrue(treasury.supportsInterface(type(IAccessControlDefaultAdminRules).interfaceId));
         // Must support IERC165 itself
         assertTrue(treasury.supportsInterface(type(IERC165).interfaceId));
         // Must NOT support random interfaces
@@ -107,19 +108,79 @@ contract SecurityInvariantsTest is Test {
         assertEq(treasury.getRoleAdmin(WITHDRAWER_ROLE), DEFAULT_ADMIN_ROLE);
     }
 
-    /// @notice After full governance transition, the original deployer has zero authority.
+    /// @notice grantRole(DEFAULT_ADMIN_ROLE) reverts — must use 2-step transfer.
+    function test_CannotGrantDefaultAdminDirectly() public {
+        address newAdmin = makeAddr("newAdmin");
+        vm.prank(admin);
+        vm.expectRevert();
+        treasury.grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
+    }
+
+    /// @notice revokeRole(DEFAULT_ADMIN_ROLE) reverts — must use 2-step transfer.
+    function test_CannotRevokeDefaultAdminDirectly() public {
+        vm.prank(admin);
+        vm.expectRevert();
+        treasury.revokeRole(DEFAULT_ADMIN_ROLE, admin);
+    }
+
+    /// @notice Full 2-step admin transfer with delay verification.
+    function test_TwoStepAdminTransfer() public {
+        address newAdmin = makeAddr("newAdmin");
+
+        // Begin transfer
+        vm.prank(admin);
+        treasury.beginDefaultAdminTransfer(newAdmin);
+
+        // Accept after delay
+        vm.warp(block.timestamp + ADMIN_DELAY + 1);
+        vm.prank(newAdmin);
+        treasury.acceptDefaultAdminTransfer();
+
+        // Verify
+        assertEq(treasury.defaultAdmin(), newAdmin);
+    }
+
+    /// @notice Accept reverts before delay has elapsed.
+    function test_AdminTransferRevertsBeforeDelay() public {
+        address newAdmin = makeAddr("newAdmin");
+
+        vm.prank(admin);
+        treasury.beginDefaultAdminTransfer(newAdmin);
+
+        // Try to accept before delay (only warp 1 second)
+        vm.warp(block.timestamp + 1);
+        vm.prank(newAdmin);
+        vm.expectRevert();
+        treasury.acceptDefaultAdminTransfer();
+    }
+
+    /// @notice Verify admin delay matches constructor argument.
+    function test_DefaultAdminDelayIs600() public view {
+        assertEq(treasury.defaultAdminDelay(), ADMIN_DELAY);
+    }
+
+    /// @notice After full governance transition via 2-step transfer,
+    ///         the original deployer has zero authority.
     function test_DeployerHasNoPowerAfterTransition() public {
         address dao = makeAddr("dao");
 
-        vm.startPrank(admin);
+        // Grant WITHDRAWER_ROLE to dao
+        vm.prank(admin);
         treasury.grantRole(WITHDRAWER_ROLE, dao);
-        treasury.grantRole(DEFAULT_ADMIN_ROLE, dao);
+
+        // Revoke admin's WITHDRAWER_ROLE
+        vm.prank(admin);
         treasury.revokeRole(WITHDRAWER_ROLE, admin);
-        treasury.renounceRole(DEFAULT_ADMIN_ROLE, admin);
-        vm.stopPrank();
+
+        // 2-step admin transfer to dao
+        vm.prank(admin);
+        treasury.beginDefaultAdminTransfer(dao);
+        vm.warp(block.timestamp + ADMIN_DELAY + 1);
+        vm.prank(dao);
+        treasury.acceptDefaultAdminTransfer();
 
         // Admin has zero roles
-        assertFalse(treasury.hasRole(DEFAULT_ADMIN_ROLE, admin));
+        assertNotEq(treasury.defaultAdmin(), admin);
         assertFalse(treasury.hasRole(WITHDRAWER_ROLE, admin));
 
         // Admin cannot withdraw
@@ -148,26 +209,16 @@ contract SecurityInvariantsTest is Test {
     // ──────────────────────────────────────────────────────────────────
 
     /// @notice A malicious recipient that re-enters withdraw() during the call
-    ///         cannot double-spend. The revert chain:
-    ///         1. Inner withdraw() reverts with "insufficient balance"
-    ///         2. Attacker's receive() reverts (propagates inner revert)
-    ///         3. Outer withdraw()'s call{value} fails → "transfer failed"
-    ///         4. Entire outer call reverts — no funds moved.
+    ///         cannot double-spend.
     function test_ReentrancyCannotDoublespend() public {
         ReentrantAttacker attk = new ReentrantAttacker(treasury);
 
-        // Grant attacker contract the WITHDRAWER_ROLE
         vm.prank(admin);
         treasury.grantRole(WITHDRAWER_ROLE, address(attk));
 
-        // Attacker tries to re-enter and drain entire balance
-        // First call: 60 ether. Re-entrant call: 60 ether again.
-        // Second call fails (insufficient balance), which reverts the receive(),
-        // which causes the outer call{value} to fail → "transfer failed"
         vm.expectRevert("OlympiaTreasury: transfer failed");
         attk.attack(60 ether);
 
-        // Treasury balance is unchanged — the entire outer call reverted
         assertEq(address(treasury).balance, 100 ether);
     }
 
@@ -179,7 +230,6 @@ contract SecurityInvariantsTest is Test {
         vm.prank(admin);
         treasury.grantRole(WITHDRAWER_ROLE, address(attk));
 
-        // Try to withdraw 51 ether twice (102 total > 100 balance)
         vm.expectRevert("OlympiaTreasury: transfer failed");
         attk.attack(51 ether);
 
@@ -199,15 +249,21 @@ contract SecurityInvariantsTest is Test {
     }
 
     /// @notice If all roles are renounced, funds are permanently locked.
-    ///         This is by design — the immutability guarantee.
+    ///         Uses 2-step transfer to address(0) for admin renouncement.
     function test_FundsLockedWhenAllRolesRenounced() public {
-        vm.startPrank(admin);
+        // Revoke WITHDRAWER_ROLE
+        vm.prank(admin);
         treasury.revokeRole(WITHDRAWER_ROLE, admin);
+
+        // Begin admin transfer to address(0) — renouncement via 2-step
+        vm.prank(admin);
+        treasury.beginDefaultAdminTransfer(address(0));
+        vm.warp(block.timestamp + ADMIN_DELAY + 1);
+        vm.prank(admin);
         treasury.renounceRole(DEFAULT_ADMIN_ROLE, admin);
-        vm.stopPrank();
 
         // No one holds any role
-        assertFalse(treasury.hasRole(DEFAULT_ADMIN_ROLE, admin));
+        assertEq(treasury.defaultAdmin(), address(0));
         assertFalse(treasury.hasRole(WITHDRAWER_ROLE, admin));
 
         // Cannot withdraw
@@ -305,7 +361,6 @@ contract ReentrantAttacker {
     receive() external payable {
         if (attacking) {
             attacking = false;
-            // Re-enter: try to withdraw the same amount again
             treasury.withdraw(payable(address(this)), attackAmount);
         }
     }

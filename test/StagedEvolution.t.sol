@@ -9,10 +9,10 @@ import {MockLCurveDistributor} from "./mocks/MockLCurveDistributor.sol";
 
 /// @title StagedEvolution
 /// @notice Demonstrates the logical evolution of the Olympia Treasury through 4 stages,
-///         with realistic authorization progression:
+///         with realistic authorization progression using AccessControlDefaultAdminRules:
 ///
 ///   Stage 1: ECIP-1111 + 1112 — coreMultisig (3-of-5 maintainers) bootstraps the treasury
-///   Stage 2: + ECIP-1113 — coreMultisig hands off to CoreDAO, transfers admin role
+///   Stage 2: + ECIP-1113 — coreMultisig hands off to CoreDAO via 2-step admin transfer
 ///   Stage 3: + ECIP-1117 — CoreDAO (now admin) enables FutarchyDAO for ecosystem proposals
 ///   Stage 4: + ECIP-1115 — CoreDAO enables L-curve miner distribution
 ///
@@ -32,6 +32,19 @@ contract StagedEvolutionTest is Test {
     bytes32 constant WITHDRAWER_ROLE = keccak256("WITHDRAWER_ROLE");
     bytes32 constant DEFAULT_ADMIN_ROLE = 0x00;
 
+    // Admin transfer delay for demo (10 minutes)
+    uint48 constant ADMIN_DELAY = 600;
+
+    /// @dev Helper: perform 2-step admin transfer from current admin to new admin.
+    ///      Requires vm.prank(currentAdmin) context for beginDefaultAdminTransfer.
+    function _transferAdmin(OlympiaTreasury treasury, address currentAdmin, address newAdmin) internal {
+        vm.prank(currentAdmin);
+        treasury.beginDefaultAdminTransfer(newAdmin);
+        vm.warp(block.timestamp + ADMIN_DELAY + 1);
+        vm.prank(newAdmin);
+        treasury.acceptDefaultAdminTransfer();
+    }
+
     // ──────────────────────────────────────────────────────────────────
     // Stage 1: ECIP-1111 + 1112 — Bootstrap with Core Multisig
     // ──────────────────────────────────────────────────────────────────
@@ -40,7 +53,7 @@ contract StagedEvolutionTest is Test {
     ///         The multisig represents the initial core maintainer group (e.g., 3-of-5).
     ///         No DAO contracts yet — multisig handles urgent operational spending.
     function test_Stage1_RedirectAndAccumulation() public {
-        OlympiaTreasury treasury = new OlympiaTreasury(coreMultisig);
+        OlympiaTreasury treasury = new OlympiaTreasury(ADMIN_DELAY, coreMultisig);
 
         // Simulate baseFee state credits across 10 "blocks"
         // In production, core-geth's Finalize() credits baseFee * gasUsed each block
@@ -52,7 +65,7 @@ contract StagedEvolutionTest is Test {
         }
 
         assertEq(address(treasury).balance, totalCredits);
-        assertTrue(treasury.hasRole(DEFAULT_ADMIN_ROLE, coreMultisig));
+        assertEq(treasury.defaultAdmin(), coreMultisig);
         assertTrue(treasury.hasRole(WITHDRAWER_ROLE, coreMultisig));
 
         // Core multisig withdraws for immediate operational needs
@@ -74,10 +87,10 @@ contract StagedEvolutionTest is Test {
     // ──────────────────────────────────────────────────────────────────
 
     /// @notice Stage 2: Core multisig deploys CoreDAO, grants it WITHDRAWER_ROLE,
-    ///         then transfers DEFAULT_ADMIN_ROLE to CoreDAO. The multisig steps back.
-    ///         CoreDAO is now the sole authority for spending AND future governance changes.
+    ///         then transfers DEFAULT_ADMIN_ROLE to CoreDAO via 2-step process.
+    ///         The multisig steps back after the admin delay.
     function test_Stage2_TraditionalDAOForCoreInfra() public {
-        OlympiaTreasury treasury = new OlympiaTreasury(coreMultisig);
+        OlympiaTreasury treasury = new OlympiaTreasury(ADMIN_DELAY, coreMultisig);
         vm.deal(address(treasury), 100 ether);
 
         MockCoreDAO coreDAO = new MockCoreDAO(payable(address(treasury)));
@@ -98,23 +111,20 @@ contract StagedEvolutionTest is Test {
         assertEq(nodeHost.balance, 5 ether);
         assertEq(address(treasury).balance, 60 ether);
 
-        // ── Phase 2b: Full handoff ──
-        // Multisig transfers DEFAULT_ADMIN_ROLE to CoreDAO, then steps back entirely
-        vm.startPrank(coreMultisig);
-        // Grant admin role to CoreDAO so it can manage roles going forward
-        treasury.grantRole(DEFAULT_ADMIN_ROLE, address(coreDAO));
-        // Revoke multisig's WITHDRAWER_ROLE
+        // ── Phase 2b: Full handoff via 2-step admin transfer ──
+        // Multisig revokes its own WITHDRAWER_ROLE first
+        vm.prank(coreMultisig);
         treasury.revokeRole(WITHDRAWER_ROLE, coreMultisig);
-        // Renounce multisig's DEFAULT_ADMIN_ROLE — irreversible handoff
-        treasury.renounceRole(DEFAULT_ADMIN_ROLE, coreMultisig);
-        vm.stopPrank();
+
+        // Then begins admin transfer to CoreDAO (2-step with delay)
+        _transferAdmin(treasury, coreMultisig, address(coreDAO));
 
         // Multisig is now completely out — no admin, no withdrawer
-        assertFalse(treasury.hasRole(DEFAULT_ADMIN_ROLE, coreMultisig));
+        assertNotEq(treasury.defaultAdmin(), coreMultisig);
         assertFalse(treasury.hasRole(WITHDRAWER_ROLE, coreMultisig));
 
-        // CoreDAO has both roles
-        assertTrue(treasury.hasRole(DEFAULT_ADMIN_ROLE, address(coreDAO)));
+        // CoreDAO is now admin + withdrawer
+        assertEq(treasury.defaultAdmin(), address(coreDAO));
         assertTrue(treasury.hasRole(WITHDRAWER_ROLE, address(coreDAO)));
 
         // Multisig cannot withdraw
@@ -127,7 +137,7 @@ contract StagedEvolutionTest is Test {
         assertEq(clientDev.balance, 30 ether);
 
         console.log("Stage 2: coreMultisig -> CoreDAO handoff complete");
-        console.log("  Authorized by: coreMultisig (transferred admin to CoreDAO)");
+        console.log("  Authorized by: coreMultisig (2-step admin transfer to CoreDAO)");
         console.log("  coreMultisig: no roles (fully stepped back)");
         console.log("  CoreDAO: DEFAULT_ADMIN_ROLE + WITHDRAWER_ROLE");
         console.log("  Funded: client dev (30 ETH), auditor (15 ETH), node host (5 ETH)");
@@ -139,21 +149,19 @@ contract StagedEvolutionTest is Test {
 
     /// @notice Stage 3: CoreDAO (now admin) enables FutarchyDAO for ecosystem proposals.
     ///         CoreDAO handles essential infra (60%), FutarchyDAO handles proposals (40%).
-    ///         The DAO itself decides when excess funds justify a prediction market pipeline.
     function test_Stage3_FutarchyCoexistsWithCoreDAO() public {
-        OlympiaTreasury treasury = new OlympiaTreasury(coreMultisig);
+        OlympiaTreasury treasury = new OlympiaTreasury(ADMIN_DELAY, coreMultisig);
         vm.deal(address(treasury), 100 ether);
 
         MockCoreDAO coreDAO = new MockCoreDAO(payable(address(treasury)));
         MockFutarchyDAO futarchyDAO = new MockFutarchyDAO(payable(address(treasury)));
 
-        // ── Bootstrap: multisig sets up CoreDAO as admin ──
-        vm.startPrank(coreMultisig);
+        // ── Bootstrap: multisig sets up CoreDAO as admin (2-step) ──
+        vm.prank(coreMultisig);
         treasury.grantRole(WITHDRAWER_ROLE, address(coreDAO));
-        treasury.grantRole(DEFAULT_ADMIN_ROLE, address(coreDAO));
+        vm.prank(coreMultisig);
         treasury.revokeRole(WITHDRAWER_ROLE, coreMultisig);
-        treasury.renounceRole(DEFAULT_ADMIN_ROLE, coreMultisig);
-        vm.stopPrank();
+        _transferAdmin(treasury, coreMultisig, address(coreDAO));
 
         // ── CoreDAO enables FutarchyDAO ──
         // CoreDAO is now the admin — it authorizes the futarchy pipeline
@@ -181,7 +189,7 @@ contract StagedEvolutionTest is Test {
         assertEq(address(treasury).balance, 0);
 
         // coreMultisig has no power
-        assertFalse(treasury.hasRole(DEFAULT_ADMIN_ROLE, coreMultisig));
+        assertNotEq(treasury.defaultAdmin(), coreMultisig);
 
         console.log("Stage 3: CoreDAO enables FutarchyDAO");
         console.log("  Authorized by: CoreDAO (as DEFAULT_ADMIN_ROLE holder)");
@@ -195,24 +203,21 @@ contract StagedEvolutionTest is Test {
     // ──────────────────────────────────────────────────────────────────
 
     /// @notice Stage 4: CoreDAO enables L-curve miner incentives alongside existing pipelines.
-    ///         Block rewards are declining (ECIP-1017 disinflation), so the DAO decides to
-    ///         supplement miner income with predictable treasury-funded distributions.
     ///         Core DAO (40%) + Futarchy DAO (30%) + L-Curve Miners (30%).
     function test_Stage4_LCurveMinerIncentives() public {
-        OlympiaTreasury treasury = new OlympiaTreasury(coreMultisig);
+        OlympiaTreasury treasury = new OlympiaTreasury(ADMIN_DELAY, coreMultisig);
         vm.deal(address(treasury), 100 ether);
 
         MockCoreDAO coreDAO = new MockCoreDAO(payable(address(treasury)));
         MockFutarchyDAO futarchyDAO = new MockFutarchyDAO(payable(address(treasury)));
         MockLCurveDistributor lcurve = new MockLCurveDistributor(payable(address(treasury)));
 
-        // ── Bootstrap: multisig → CoreDAO ──
-        vm.startPrank(coreMultisig);
+        // ── Bootstrap: multisig → CoreDAO (2-step) ──
+        vm.prank(coreMultisig);
         treasury.grantRole(WITHDRAWER_ROLE, address(coreDAO));
-        treasury.grantRole(DEFAULT_ADMIN_ROLE, address(coreDAO));
+        vm.prank(coreMultisig);
         treasury.revokeRole(WITHDRAWER_ROLE, coreMultisig);
-        treasury.renounceRole(DEFAULT_ADMIN_ROLE, coreMultisig);
-        vm.stopPrank();
+        _transferAdmin(treasury, coreMultisig, address(coreDAO));
 
         // ── CoreDAO enables both FutarchyDAO and LCurveDistributor ──
         coreDAO.enablePipeline(address(futarchyDAO), "ECIP-1117: Futarchy for ecosystem proposals");
@@ -270,22 +275,21 @@ contract StagedEvolutionTest is Test {
     // ──────────────────────────────────────────────────────────────────
 
     /// @notice Edge: CoreDAO migrates from one version to another (e.g., OZ v5 → v6).
-    ///         CoreDAO (as admin) authorizes the new DAO, disables the old one.
+    ///         v5 begins admin transfer to v6. v6 accepts after delay. v6 disables v5.
     ///         Zero downtime, zero fund loss — treasury address never changes.
     function test_Edge_DAOMigration() public {
-        OlympiaTreasury treasury = new OlympiaTreasury(coreMultisig);
+        OlympiaTreasury treasury = new OlympiaTreasury(ADMIN_DELAY, coreMultisig);
         vm.deal(address(treasury), 100 ether);
 
         // Deploy "v5" CoreDAO
         MockCoreDAO daoV5 = new MockCoreDAO(payable(address(treasury)));
 
-        // Bootstrap: multisig → v5 CoreDAO
-        vm.startPrank(coreMultisig);
+        // Bootstrap: multisig → v5 CoreDAO (2-step)
+        vm.prank(coreMultisig);
         treasury.grantRole(WITHDRAWER_ROLE, address(daoV5));
-        treasury.grantRole(DEFAULT_ADMIN_ROLE, address(daoV5));
+        vm.prank(coreMultisig);
         treasury.revokeRole(WITHDRAWER_ROLE, coreMultisig);
-        treasury.renounceRole(DEFAULT_ADMIN_ROLE, coreMultisig);
-        vm.stopPrank();
+        _transferAdmin(treasury, coreMultisig, address(daoV5));
 
         // v5 DAO operates normally
         daoV5.fundCoreInfra(payable(clientDev), 20 ether, "v5 DAO: client maintenance");
@@ -300,8 +304,14 @@ contract StagedEvolutionTest is Test {
         // v5 DAO (as admin) authorizes its own succession:
         // 1. Enable v6 as withdrawer
         daoV5.enablePipeline(address(daoV6), "Migration: enable v6 CoreDAO");
-        // 2. Transfer DEFAULT_ADMIN_ROLE to v6, renounce own admin (irreversible)
+
+        // 2. Begin 2-step admin transfer to v6
         daoV5.transferAdminTo(address(daoV6));
+        // Wait for admin delay
+        vm.warp(block.timestamp + ADMIN_DELAY + 1);
+        // v6 accepts the admin transfer
+        daoV6.acceptAdminTransfer();
+
         // 3. v6 (now admin) disables v5's withdrawal access
         daoV6.disablePipeline(address(daoV5), "Migration: v5 DAO winding down");
 
@@ -315,7 +325,7 @@ contract StagedEvolutionTest is Test {
         assertEq(address(treasury).balance, 50 ether);
 
         console.log("Edge: DAO migration v5 -> v6");
-        console.log("  Authorized by: v5 CoreDAO (self-sunset, enables successor)");
+        console.log("  Authorized by: v5 CoreDAO (2-step admin transfer, enables successor)");
         console.log("  v5 withdrew 20 ETH before migration");
         console.log("  v6 withdrew 30 ETH after migration");
         console.log("  Treasury continuous: 100 -> 80 -> 50 ETH, zero fund loss");
@@ -327,29 +337,19 @@ contract StagedEvolutionTest is Test {
 
     /// @notice Edge: All users stay on Legacy (Type-0) transactions — no Type-2 adoption.
     ///         Treasury revenue is identical because EIP-1559 baseFee mechanism works
-    ///         regardless of transaction type. Legacy txs pay gasPrice = baseFee + tip,
-    ///         so baseFee * gasUsed still flows to treasury.
+    ///         regardless of transaction type.
     function test_Edge_LegacyOnlyAdoption() public {
-        OlympiaTreasury treasury = new OlympiaTreasury(coreMultisig);
+        OlympiaTreasury treasury = new OlympiaTreasury(ADMIN_DELAY, coreMultisig);
 
         // Simulate baseFee accumulation under legacy-only usage
-        // Block 1: low usage, baseFee = 1 Gwei, gasUsed = 21000
         uint256 block1Revenue = 1e9 * 21000;
-
-        // Block 2: moderate usage, baseFee still ~1 Gwei
         uint256 block2Revenue = 1e9 * 63000; // 3 legacy txs
-
-        // Block 3: heavy usage, baseFee rises to ~1.125 Gwei
         uint256 block3Revenue = 1_125_000_000 * 210000; // 10 legacy txs, higher baseFee
 
         uint256 totalRevenue = block1Revenue + block2Revenue + block3Revenue;
 
         // Simulate state credits
         vm.deal(address(treasury), totalRevenue);
-
-        // Key insight: the SAME amount accumulates whether users use
-        // Type-0 (gasPrice = baseFee + tip) or Type-2 (gasFeeCap, gasTipCap).
-        // The baseFee portion is always baseFee * gasUsed, regardless of tx type.
 
         vm.prank(coreMultisig);
         treasury.withdraw(payable(clientDev), totalRevenue);
