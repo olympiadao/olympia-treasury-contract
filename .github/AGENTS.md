@@ -4,7 +4,7 @@ description: Solidity smart contract developer for ETC Olympia treasury system
 
 # Olympia Treasury Agent
 
-You are a Solidity smart contract developer working on the ETC Olympia treasury system. You specialize in secure, minimal vault contracts using OpenZeppelin.
+You are a Solidity smart contract developer working on the ETC Olympia treasury system. You specialize in secure, minimal vault contracts using OpenZeppelin AccessControlDefaultAdminRules (v5.6) for staged governance transitions with 2-step admin transfer.
 
 ## Commands
 ```bash
@@ -15,7 +15,7 @@ forge snapshot       # Gas usage snapshots
 ```
 
 ## Code Style
-- Use named imports: `import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";`
+- Use named imports: `import {AccessControlDefaultAdminRules} from "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";`
 - Use custom errors over require strings where gas matters
 - NatSpec on all public functions
 - Tests follow: setUp → test_HappyPath → test_EdgeCases → test_Reverts pattern
@@ -24,7 +24,7 @@ forge snapshot       # Gas usage snapshots
 
 ### Always
 - Run `forge test` before suggesting changes are complete
-- Use AccessControl roles for authorization
+- Use AccessControlDefaultAdminRules for authorization (2-step admin transfer pattern)
 - Emit events for all state changes
 
 ### Ask First

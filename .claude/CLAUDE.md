@@ -1,7 +1,7 @@
 # Olympia Treasury Contract
 
 ## Project Description
-ETC Olympia hard fork treasury vault (ECIP-1112). Built on OpenZeppelin AccessControl (ECIP-1113). Receives basefee revenue from EIP-1559 via state credit (ECIP-1111) and provides role-gated withdrawal. Staged governance — admin EOA now, futarchy DAO (ECIP-1117) later.
+ETC Olympia hard fork treasury vault (ECIP-1112). Built on OpenZeppelin AccessControlDefaultAdminRules (v5.6, ECIP-1113) with 2-step admin transfer and 600s delay. Receives basefee revenue from EIP-1559 via state credit (ECIP-1111) and provides role-gated withdrawal. Staged governance — admin EOA now, 2-step transfer to futarchy DAO (ECIP-1117) later.
 
 ## Tech Stack
 - Solidity 0.8.28
@@ -28,15 +28,19 @@ forge script script/Deploy.s.sol:DeployScript --rpc-url $ETC_RPC_URL --private-k
 
 ## Project Structure
 ```
-src/OlympiaTreasury.sol      # Treasury vault contract
-test/OlympiaTreasury.t.sol   # 10 tests
-script/Deploy.s.sol          # CREATE2 deployment
-broadcast/Deploy.s.sol/63/   # Mordor deployment logs
+src/OlympiaTreasury.sol        # Treasury vault contract (AccessControlDefaultAdminRules)
+test/OlympiaTreasury.t.sol     # 10 unit tests
+test/StagedEvolution.t.sol     # 6 integration tests (governance lifecycle)
+test/SecurityInvariants.t.sol  # 22 security proofs
+test/mocks/MockCoreDAO.sol     # Mock DAO for integration tests
+script/Deploy.s.sol            # CREATE2 deployment (salt: OLYMPIA_DEMO_V0_1)
+broadcast/Deploy.s.sol/63/     # Mordor deployment logs
+broadcast/Deploy.s.sol/61/     # ETC mainnet deployment logs
 ```
 
 ## Deployments
 - **Mordor:** `0xd6165F3aF4281037bce810621F62B43077Fb0e37`
-- **ETC mainnet:** Not yet deployed
+- **ETC mainnet:** `0xd6165F3aF4281037bce810621F62B43077Fb0e37`
 
 ## Boundaries
 ### Always Do

@@ -6,7 +6,7 @@
 
 ## Rules
 - All contracts use SPDX-License-Identifier: MIT
-- Use OpenZeppelin AccessControl for role management
+- Use OpenZeppelin AccessControlDefaultAdminRules (v5.6) for role management with 2-step admin transfer
 - Use CREATE2 for deterministic deployment addresses
 - Tests use Forge Test with vm.prank/vm.deal/vm.expectRevert
 - No upgradeable proxies — contracts are immutable

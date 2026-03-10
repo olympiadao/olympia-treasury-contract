@@ -1,6 +1,6 @@
 # Olympia Treasury Contract
 
-Immutable treasury vault for the ETC Olympia hard fork. Built on **OpenZeppelin Contracts v5.6.0** using the AccessControl role-based permission model.
+Immutable treasury vault for the ETC Olympia hard fork. Built on **OpenZeppelin Contracts v5.6.0** using **AccessControlDefaultAdminRules** — the industry-standard 2-step admin transfer pattern with configurable delay.
 
 ## Overview
 
@@ -8,7 +8,7 @@ Immutable treasury vault for the ETC Olympia hard fork. Built on **OpenZeppelin 
 |---|---|
 | **ECIP** | [ECIP-1112](https://ecips.ethereumclassic.org/ECIPs/ecip-1112) — Treasury Vault |
 | **Funding** | [ECIP-1111](https://ecips.ethereumclassic.org/ECIPs/ecip-1111) — EIP-1559 basefee redirect |
-| **Governance** | [ECIP-1113](https://ecips.ethereumclassic.org/ECIPs/ecip-1113) — OpenZeppelin AccessControl (current) |
+| **Governance** | [ECIP-1113](https://ecips.ethereumclassic.org/ECIPs/ecip-1113) — OZ AccessControlDefaultAdminRules (2-step admin, 600s delay) |
 | **Future** | [ECIP-1117](https://ecips.ethereumclassic.org/ECIPs/ecip-1117) — Futarchy DAO governance |
 | **Chain** | Ethereum Classic (ETC mainnet 61, Mordor testnet 63) |
 | **Solidity** | 0.8.28 |
@@ -102,9 +102,9 @@ The treasury uses OpenZeppelin's **AccessControl** for role-based permissioning.
 
 ### Native Functions
 
-#### `constructor(address admin)`
+#### `constructor(uint48 adminTransferDelay, address admin)`
 
-Deploys the treasury and grants both `DEFAULT_ADMIN_ROLE` and `WITHDRAWER_ROLE` to `admin`.
+Deploys the treasury with a 2-step admin transfer delay. Grants `DEFAULT_ADMIN_ROLE` (via `AccessControlDefaultAdminRules`) and `WITHDRAWER_ROLE` to `admin`. Demo v0.1 uses 600s (10 min) delay.
 
 #### `withdraw(address payable to, uint256 amount) external`
 
@@ -112,7 +112,7 @@ Transfers `amount` wei of ETC to `to`. Requires `WITHDRAWER_ROLE`. Emits `Withdr
 
 #### `receive() external payable`
 
-Accepts direct ETC transfers. No access control. Production funding arrives via consensus-layer state credits, but `receive()` enables testing and voluntary deposits.
+Accepts direct ETC transfers. No access control. Emits `Received(from, amount)`. Production funding arrives via consensus-layer state credits, but `receive()` enables testing and voluntary deposits.
 
 ### Constants
 
@@ -126,18 +126,24 @@ Accepts direct ETC transfers. No access control. Production funding arrives via 
 | Event | Parameters |
 |-------|-----------|
 | `Withdrawal` | `address indexed to`, `uint256 amount` |
+| `Received` | `address indexed from`, `uint256 amount` |
 
-### Inherited from AccessControl
+### Inherited from AccessControlDefaultAdminRules
 
-See [OpenZeppelin AccessControl docs](https://docs.openzeppelin.com/contracts/5.x/access-control) for full details.
+See [OpenZeppelin AccessControlDefaultAdminRules docs](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessControlDefaultAdminRules) for full details. This extends `AccessControl` with a mandatory 2-step transfer for `DEFAULT_ADMIN_ROLE` — direct `grantRole`/`revokeRole` on `DEFAULT_ADMIN_ROLE` reverts.
 
 | Function | Access | Description |
 |----------|--------|-------------|
 | `hasRole(bytes32, address) → bool` | Public (view) | Check if address holds role |
-| `grantRole(bytes32, address)` | Role admin | Grant role to address |
-| `revokeRole(bytes32, address)` | Role admin | Revoke role from address |
+| `grantRole(bytes32, address)` | Role admin | Grant role to address (reverts for DEFAULT_ADMIN_ROLE) |
+| `revokeRole(bytes32, address)` | Role admin | Revoke role from address (reverts for DEFAULT_ADMIN_ROLE) |
 | `renounceRole(bytes32, address)` | Self only | Voluntarily surrender own role |
 | `getRoleAdmin(bytes32) → bytes32` | Public (view) | Get admin role for a role |
+| `defaultAdmin() → address` | Public (view) | Current DEFAULT_ADMIN_ROLE holder |
+| `defaultAdminDelay() → uint48` | Public (view) | Transfer delay (600s for demo v0.1) |
+| `beginDefaultAdminTransfer(address)` | Admin only | Start 2-step admin transfer |
+| `acceptDefaultAdminTransfer()` | Pending admin | Accept transfer after delay elapsed |
+| `cancelDefaultAdminTransfer()` | Admin only | Cancel pending transfer |
 | `supportsInterface(bytes4) → bool` | Public (view) | ERC-165 interface detection |
 
 ## Role Management Guide
@@ -198,28 +204,38 @@ cast send $TREASURY "revokeRole(bytes32,address)" \
   --private-key $PRIVATE_KEY --rpc-url $RPC --legacy
 ```
 
-### Renouncing Roles (Irreversible)
+### Admin Transfer (2-Step with Delay)
+
+`AccessControlDefaultAdminRules` enforces a mandatory delay between initiating and completing an admin transfer. Direct `grantRole(DEFAULT_ADMIN_ROLE)` and `revokeRole(DEFAULT_ADMIN_ROLE)` revert.
 
 ```bash
-# Renounce your own DEFAULT_ADMIN_ROLE (CANNOT be undone)
-cast send $TREASURY "renounceRole(bytes32,address)" \
-  0x0000000000000000000000000000000000000000000000000000000000000000 \
-  $YOUR_ADDRESS \
+# Step 1: Begin transfer (current admin initiates)
+cast send $TREASURY "beginDefaultAdminTransfer(address)" \
+  $NEW_ADMIN \
   --private-key $PRIVATE_KEY --rpc-url $RPC --legacy
+
+# Step 2: Wait for delay (600 seconds for demo v0.1)
+# Check pending transfer:
+cast call $TREASURY "pendingDefaultAdmin()(address,uint48)" --rpc-url $RPC
+
+# Step 3: Accept transfer (new admin completes)
+cast send $TREASURY "acceptDefaultAdminTransfer()" \
+  --private-key $NEW_ADMIN_KEY --rpc-url $RPC --legacy
 ```
 
 ### Governance Transition Checklist
 
-To transition from admin EOA to a DAO contract:
+To transition from admin EOA to a DAO contract using the OZ 5.6 2-step admin transfer pattern:
 
 1. Deploy DAO contract
 2. `grantRole(WITHDRAWER_ROLE, dao)` — DAO can now withdraw
 3. Verify: `hasRole(WITHDRAWER_ROLE, dao)` returns `true`
 4. Test: DAO withdraws a small amount
-5. `grantRole(DEFAULT_ADMIN_ROLE, dao)` — DAO can now manage roles
-6. `revokeRole(WITHDRAWER_ROLE, admin)` — Remove admin's withdrawal rights
-7. `renounceRole(DEFAULT_ADMIN_ROLE, admin)` — **Irreversible.** Admin loses all authority.
-8. Verify: `hasRole(DEFAULT_ADMIN_ROLE, admin)` returns `false`
+5. `revokeRole(WITHDRAWER_ROLE, admin)` — Remove admin's withdrawal rights
+6. `beginDefaultAdminTransfer(dao)` — Initiate 2-step admin transfer
+7. Wait 600 seconds (admin transfer delay)
+8. DAO calls `acceptDefaultAdminTransfer()` — **DAO is now admin.** Original admin loses all authority.
+9. Verify: `defaultAdmin()` returns DAO address
 
 > **Note:** All `cast send` commands use `--legacy` because ETC is pre-EIP-1559 until the Olympia hard fork activates. After activation, `--legacy` remains valid but Type-2 transactions also work.
 
@@ -298,9 +314,9 @@ This abstracts percentage logic **outside** the treasury contract, keeping the t
 | Chain | Address | Block |
 |-------|---------|-------|
 | Mordor (63) | `0xd6165F3aF4281037bce810621F62B43077Fb0e37` | [Deployed](broadcast/Deploy.s.sol/63/) |
-| ETC Mainnet (61) | — | Pending Olympia activation |
+| ETC Mainnet (61) | `0xd6165F3aF4281037bce810621F62B43077Fb0e37` | [Deployed](broadcast/Deploy.s.sol/61/) |
 
-CREATE2 salt (`keccak256("OLYMPIA_TREASURY_V1")`) ensures deterministic addresses across chains given the same deployer.
+CREATE2 salt (`keccak256("OLYMPIA_DEMO_V0_1")`) ensures the same deterministic address on both chains given the same deployer and bytecode.
 
 ## Setup
 
@@ -316,10 +332,10 @@ forge build
 forge test -vv
 ```
 
-33 tests across 3 files:
+38 tests across 3 files:
 - **`OlympiaTreasury.t.sol`** — 10 unit tests: role assignment, withdrawal, revocation, events, edge cases (zero address, insufficient balance, unauthorized access)
-- **`StagedEvolution.t.sol`** — 6 integration tests: 4 governance stages (bootstrap → DAO → futarchy → L-curve) + 2 edge cases (DAO migration, legacy tx adoption)
-- **`SecurityInvariants.t.sol`** — 17 security proofs: immutability (no selfdestruct, no delegatecall, no proxy), access control hardening, reentrancy resistance, fund safety, and fuzz tests (amounts, callers, recipients)
+- **`StagedEvolution.t.sol`** — 6 integration tests: 4 governance stages (bootstrap → DAO → futarchy → L-curve) + 2 edge cases (DAO migration, legacy tx adoption). All use 2-step admin transfer pattern.
+- **`SecurityInvariants.t.sol`** — 22 security proofs: immutability (no selfdestruct, no delegatecall, no proxy), access control hardening (2-step admin transfer, delay verification, direct grant/revoke rejection), reentrancy resistance, fund safety, and fuzz tests (amounts, callers, recipients)
 
 ## Deploy
 
