@@ -13,10 +13,21 @@ out/
 # Docs
 docs/
 
-# Environment (contains private keys)
+# Secrets & credentials
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account.json
+secrets/
+keystore/
+*.keystore
+wallet.json
+mnemonic.txt
 
 # Claude internal
 .claude/SESSION_NOTES.md
@@ -25,6 +36,14 @@ docs/
 SESSION_NOTES.md
 PLANNING.md
 SCRATCH.md
+*.scratch.*
+*.draft.*
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
