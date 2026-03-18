@@ -43,7 +43,6 @@ script/Deploy.s.sol                # CREATE deployment (executor pre-computed vi
 ## Branch Strategy
 
 - **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_2`)
-- **`demo_v0.1`**: OZ 5.6 AccessControlDefaultAdminRules (deployed Mordor + ETC mainnet)
 - **`main`**: Production (future, post-Olympia Cancun activation)
 
 ## Boundaries

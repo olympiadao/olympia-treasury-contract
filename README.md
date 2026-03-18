@@ -78,16 +78,16 @@ The contract is **immutable**: no proxy pattern, no upgrade mechanism, no selfde
 
 ### Why No OpenZeppelin?
 
-| | Demo v0.1 (OZ 5.6) | Demo v0.2 (Pure Solidity) |
-|---|---|---|
-| Lines of code | ~694 (inherited) | ~30 |
-| Attack surface | AccessControl, DefaultAdminRules, ERC165 | None |
-| Admin functions | 15+ externally callable | 0 |
-| Upgrade path | Role transfer | None (immutable) |
-| Bytecode audit | Requires OZ source verification | Self-contained, trivially auditable |
-| Duplicate execution | N/A (handled by TimelockController) | N/A (handled by TimelockController) |
+| Property | Value |
+|---|---|
+| Lines of code | ~30 |
+| Attack surface | None |
+| Admin functions | 0 |
+| Upgrade path | None (immutable) |
+| Bytecode audit | Self-contained, trivially auditable |
+| Duplicate execution | N/A (handled by TimelockController) |
 
-The treasury is a dumb vault: receive ETC, send ETC to one authorized address. OZ's role-based access control was appropriate for v0.1's bootstrap phase (admin EOA model). For v0.2, the executor is pre-determined — there's nothing to configure.
+The treasury is a dumb vault: receive ETC, send ETC to one authorized address. The executor is pre-determined — there's nothing to configure.
 
 ## Contract API
 
@@ -138,15 +138,6 @@ Deployer: `0x7C3311F29e318617fed0833E68D6522948AaE995` (fresh EOA, nonce 0)
 | Mordor (63) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | [View](https://etc-mordor.blockscout.com/address/0x035b2e3c189b772e52f4c3da6c45c84a3bb871bf) |
 | ETC Mainnet (61) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | [View](https://etc.blockscout.com/address/0x035b2e3c189b772e52f4c3da6c45c84a3bb871bf) |
 
-### Demo v0.1 (OZ 5.6 AccessControlDefaultAdminRules)
-
-Preserved on the `demo_v0.1` branch.
-
-| Chain | Address | Salt |
-|-------|---------|------|
-| Mordor (63) | `0xd6165F3aF4281037bce810621F62B43077Fb0e37` | `keccak256("OLYMPIA_DEMO_V0_1")` |
-| ETC Mainnet (61) | `0xd6165F3aF4281037bce810621F62B43077Fb0e37` | `keccak256("OLYMPIA_DEMO_V0_1")` |
-
 ## Build & Test
 
 ```bash
@@ -196,7 +187,6 @@ forge script script/Deploy.s.sol:DeployScript \
 ## Branch Strategy
 
 - **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_2`)
-- **`demo_v0.1`**: OZ 5.6 AccessControlDefaultAdminRules, salt `OLYMPIA_DEMO_V0_1` (deployed Mordor + ETC mainnet)
 - **`main`**: Production (future, after Olympia activates Cancun)
 
 ## Related ECIPs
