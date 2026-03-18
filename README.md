@@ -165,6 +165,7 @@ forge script script/Deploy.s.sol:DeployScript \
 ## Branch Strategy
 
 - **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_2`)
+- **`demo_v0.1`**: OZ 5.6, AccessControlDefaultAdminRules (CREATE2 salt `OLYMPIA_DEMO_V0_1`)
 - **`main`**: Production (future, after Olympia activates Cancun)
 
 ## Related
@@ -172,6 +173,10 @@ forge script script/Deploy.s.sol:DeployScript \
 - [Olympia Governance Contracts](https://github.com/olympiadao/olympia-governance-contracts) — Governor, Executor, ECFPRegistry, SanctionsOracle, MemberNFT (ECIP-1113/1114/1119)
 - [Olympia Framework](https://github.com/olympiadao/olympia-framework) — Full specification library (11 ECIPs)
 - [Olympia App](https://github.com/olympiadao/olympia-app) — Governance dApp (Next.js 16 + wagmi)
+- [OlympiaTreasury.org](https://github.com/olympiadao/olympiatreasury-org) — Treasury monitoring dashboard
+- [OlympiaDAO.org](https://github.com/olympiadao/olympiadao-org) — Landing page
+- [EthereumClassicDAO.org](https://github.com/EthereumClassicDAO/ethereumclassicdao-org) — Institutional website
+- [Olympia Brand](https://github.com/olympiadao/olympia-brand) — Design tokens, logos, favicons
 
 ## Related ECIPs
 
