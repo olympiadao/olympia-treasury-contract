@@ -1,6 +1,6 @@
 # Olympia Treasury Contract
 
-Immutable treasury vault for the ETC Olympia hard fork. Built on **OpenZeppelin Contracts v5.6.0** using **AccessControlDefaultAdminRules** — the industry-standard 2-step admin transfer pattern with configurable delay.
+Immutable treasury vault for the ETC Olympia hard fork (ECIP-1112). **Pure Solidity** — no OpenZeppelin dependency. Single authorized caller (`immutable executor`) pre-computed via CREATE2 before deployment.
 
 ## Overview
 
@@ -8,10 +8,10 @@ Immutable treasury vault for the ETC Olympia hard fork. Built on **OpenZeppelin 
 |---|---|
 | **ECIP** | [ECIP-1112](https://ecips.ethereumclassic.org/ECIPs/ecip-1112) — Treasury Vault |
 | **Funding** | [ECIP-1111](https://ecips.ethereumclassic.org/ECIPs/ecip-1111) — EIP-1559 basefee redirect |
-| **Governance** | [ECIP-1113](https://ecips.ethereumclassic.org/ECIPs/ecip-1113) — OZ AccessControlDefaultAdminRules (2-step admin, 600s delay) |
-| **Future** | [ECIP-1117](https://ecips.ethereumclassic.org/ECIPs/ecip-1117) — Futarchy DAO governance |
+| **Governance** | [ECIP-1113](https://ecips.ethereumclassic.org/ECIPs/ecip-1113) — OlympiaExecutor (via CREATE2) |
 | **Chain** | Ethereum Classic (ETC mainnet 61, Mordor testnet 63) |
 | **Solidity** | 0.8.28 |
+| **OZ Dependency** | None |
 
 ## Architecture
 
@@ -26,20 +26,30 @@ Immutable treasury vault for the ETC Olympia hard fork. Built on **OpenZeppelin 
 ┌─────────────────────────────────────────────┐
 │  OlympiaTreasury (this contract)            │
 │                                             │
-│  AccessControlDefaultAdminRules (ECIP-1113) │
-│  ├─ DEFAULT_ADMIN_ROLE  → manages roles     │
-│  ├─ WITHDRAWER_ROLE     → withdraw(to, amt) │
-│  └─ receive()           → accept ETC        │
+│  address public immutable executor          │
+│  ├─ withdraw(to, amount) → executor only    │
+│  └─ receive()            → accept ETC       │
+│                                             │
+│  No admin. No roles. No upgrade path.       │
 └──────────────────┬──────────────────────────┘
-                   │ grantRole(WITHDRAWER_ROLE)
+                   │ executor = pre-computed CREATE2
                    ▼
 ┌─────────────────────────────────────────────┐
-│  Future: Futarchy DAO (ECIP-1117)           │
-│  - Prediction market-based spending         │
-│  - Receives WITHDRAWER_ROLE from admin      │
-│  - Admin WITHDRAWER_ROLE revoked            │
+│  OlympiaExecutor (governance contracts)     │
+│  Governor → Timelock → Executor → Treasury  │
+│  Deployed at pre-computed CREATE2 address    │
 └─────────────────────────────────────────────┘
 ```
+
+## The Bootstrap Problem
+
+How does the Treasury know its executor before the executor exists?
+
+**Answer: Pre-computed CREATE2.** The OlympiaExecutor's future CREATE2 address is hardcoded as the Treasury's `immutable executor` at deployment time. That address has no code initially — any call to `withdraw()` reverts because no one can call from an address with no code. Treasury accumulates passively.
+
+When the DAO contracts are ready (audited, testnet-validated, community-reviewed), the Executor is deployed to that exact predetermined address using CREATE2 with the published salt and bytecode. From that point, withdrawals become possible. No admin key, no setter function, no transition ceremony.
+
+This makes the bootstrap question **verifiable rather than trust-based**: does the deployed DAO bytecode match the executor address hardcoded in the treasury? Anyone can check independently.
 
 ## How the Treasury Works
 
@@ -47,285 +57,84 @@ Immutable treasury vault for the ETC Olympia hard fork. Built on **OpenZeppelin 
 
 The Olympia hard fork activates [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559) on Ethereum Classic. Unlike Ethereum mainnet (which burns the basefee), ETC redirects 100% of basefee revenue to the treasury address via [ECIP-1111](https://ecips.ethereumclassic.org/ECIPs/ecip-1111).
 
-Each block, core-geth's `Finalize()` function credits `baseFee × gasUsed` directly to the treasury contract's balance. This is a **state credit**, not an on-chain transaction — there is no gas cost and no transaction appears in the block. Revenue scales with network usage: more transactions means higher basefee and more gas consumed.
+Each block, core-geth's `Finalize()` function credits `baseFee × gasUsed` directly to the treasury contract's balance. This is a **state credit**, not an on-chain transaction — there is no gas cost and no transaction appears in the block.
 
-This mechanism works identically for both **Type-0 (legacy)** and **Type-2 (EIP-1559)** transactions. The basefee is a **block-level** parameter set by the protocol, not a transaction field. Legacy transactions set a single `gasPrice` which must be ≥ the block's `baseFee` to be valid — the protocol implicitly decomposes it as `effective_tip = gasPrice − baseFee`. The basefee portion flows to the treasury regardless of which transaction type users adopt.
+### The Contract: An Immutable Vault
 
-### The Contract: A Role-Gated Vault
-
-The treasury contract is intentionally minimal — 39 lines of Solidity. It has exactly two capabilities:
+The treasury contract is ~30 lines of pure Solidity. It has exactly two capabilities:
 
 1. **Receive ETC** — via the `receive()` function (for direct transfers) and via state credits from the consensus layer
-2. **Withdraw ETC** — via `withdraw(to, amount)`, restricted to addresses holding `WITHDRAWER_ROLE`
+2. **Withdraw ETC** — via `withdraw(to, amount)`, restricted to the single `immutable executor` address
 
-The contract embeds no governance logic, no allocation policy, and no automatic distribution. It is **pure custody**. All spending decisions are made by whatever entity holds the `WITHDRAWER_ROLE` — an EOA, a multisig, or a DAO contract.
+The contract embeds no governance logic, no allocation policy, no role management, and no admin functions. It is **pure custody** with a single authorized caller.
 
-The contract is **immutable**: no proxy pattern, no upgrade mechanism, no selfdestruct. The treasury address is permanent across all governance phases. Only the role assignments change.
+The contract is **immutable**: no proxy pattern, no upgrade mechanism, no selfdestruct, no setter for the executor. The executor address is baked into the bytecode at construction time and can never change.
 
-### Withdrawals
+### Why No OpenZeppelin?
 
-When `withdraw(to, amount)` is called:
+| | Demo v0.1 (OZ 5.6) | Demo v0.2 (Pure Solidity) |
+|---|---|---|
+| Lines of code | ~694 (inherited) | ~30 |
+| Attack surface | AccessControl, DefaultAdminRules, ERC165 | None |
+| Admin functions | 15+ externally callable | 0 |
+| Upgrade path | Role transfer | None (immutable) |
+| Bytecode audit | Requires OZ source verification | Self-contained, trivially auditable |
+| Duplicate execution | N/A (handled by TimelockController) | N/A (handled by TimelockController) |
 
-1. **Authorization** — `onlyRole(WITHDRAWER_ROLE)` modifier checks the caller
-2. **Validation** — Reverts if `to` is the zero address or `amount` exceeds the contract balance
-3. **Transfer** — Sends ETC via low-level `call{value: amount}("")`
-4. **Event** — Emits `Withdrawal(to, amount)` for on-chain auditability
+The treasury is a dumb vault: receive ETC, send ETC to one authorized address. OZ's role-based access control was appropriate for v0.1's bootstrap phase (admin EOA model). For v0.2, the executor is pre-determined — there's nothing to configure.
 
-If any step fails, the entire call reverts with a descriptive error:
+## Contract API
+
+### `constructor(address _executor)`
+
+Sets the immutable executor. Reverts if `_executor` is `address(0)`.
+
+### `withdraw(address payable to, uint256 amount) external`
+
+Transfers `amount` wei of ETC to `to`. Only callable by the executor. Emits `Withdrawal(to, amount)`.
 
 | Error | Cause |
 |-------|-------|
-| `AccessControlUnauthorizedAccount(account, role)` | Caller lacks `WITHDRAWER_ROLE` |
-| `OlympiaTreasury: zero address` | `to` is `address(0)` |
-| `OlympiaTreasury: insufficient balance` | `amount` exceeds contract balance |
-| `OlympiaTreasury: transfer failed` | Recipient rejected the transfer |
+| `Unauthorized()` | Caller is not the executor |
+| `ZeroAddress()` | `to` is `address(0)` |
+| `InsufficientBalance()` | `amount` exceeds contract balance |
+| `TransferFailed()` | Recipient rejected the transfer |
 
-## OpenZeppelin Framework (ECIP-1113)
+### `receive() external payable`
 
-The treasury uses OpenZeppelin's **AccessControlDefaultAdminRules** for role-based permissioning with a mandatory 2-step admin transfer and configurable delay (600s for demo v0.1). This is the standard pattern for staged governance — deploy with admin control now, delegate to a DAO later without redeploying.
+Accepts direct ETC transfers. No access control. Emits `Received(from, amount)`.
 
-### Roles
+### `executor() external view returns (address)`
 
-| Role | Capability | Initial Holder |
-|------|-----------|----------------|
-| `DEFAULT_ADMIN_ROLE` | Grant/revoke all roles | Deployer EOA |
-| `WITHDRAWER_ROLE` | Call `withdraw(to, amount)` | Deployer EOA |
+Returns the immutable executor address.
 
-### Why AccessControlDefaultAdminRules
+## Interface
 
-- **2-step admin transfer**: Prevents accidental or malicious admin transfers — new admin must explicitly accept
-- **Configurable delay**: 600s window between initiating and accepting admin transfer (production would use longer)
-- **Multi-role**: Separate admin (role management) from withdrawer (spending)
-- **Composable**: Grant `WITHDRAWER_ROLE` to any address — EOA, multisig, or DAO contract
-- **Revocable**: Admin can revoke roles without redeployment
-- **Standard**: Battle-tested OZ pattern used by Compound, Aave, and others
-
-## Contract API Reference
-
-### Native Functions
-
-#### `constructor(uint48 adminTransferDelay, address admin)`
-
-Deploys the treasury with a 2-step admin transfer delay. Grants `DEFAULT_ADMIN_ROLE` (via `AccessControlDefaultAdminRules`) and `WITHDRAWER_ROLE` to `admin`. Demo v0.1 uses 600s (10 min) delay.
-
-#### `withdraw(address payable to, uint256 amount) external`
-
-Transfers `amount` wei of ETC to `to`. Requires `WITHDRAWER_ROLE`. Emits `Withdrawal(to, amount)`.
-
-#### `receive() external payable`
-
-Accepts direct ETC transfers. No access control. Emits `Received(from, amount)`. Production funding arrives via consensus-layer state credits, but `receive()` enables testing and voluntary deposits.
-
-### Constants
-
-| Name | Value |
-|------|-------|
-| `WITHDRAWER_ROLE` | `0x10dac8c06a04bec0b551627dad28bc00d6516b0caacd1c7b345fcdb5211334e4` |
-| `DEFAULT_ADMIN_ROLE` | `0x0000000000000000000000000000000000000000000000000000000000000000` |
-
-### Events
-
-| Event | Parameters |
-|-------|-----------|
-| `Withdrawal` | `address indexed to`, `uint256 amount` |
-| `Received` | `address indexed from`, `uint256 amount` |
-
-### Inherited from AccessControlDefaultAdminRules
-
-See [OpenZeppelin AccessControlDefaultAdminRules docs](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessControlDefaultAdminRules) for full details. This extends `AccessControl` with a mandatory 2-step transfer for `DEFAULT_ADMIN_ROLE` — direct `grantRole`/`revokeRole` on `DEFAULT_ADMIN_ROLE` reverts.
-
-| Function | Access | Description |
-|----------|--------|-------------|
-| `hasRole(bytes32, address) → bool` | Public (view) | Check if address holds role |
-| `grantRole(bytes32, address)` | Role admin | Grant role to address (reverts for DEFAULT_ADMIN_ROLE) |
-| `revokeRole(bytes32, address)` | Role admin | Revoke role from address (reverts for DEFAULT_ADMIN_ROLE) |
-| `renounceRole(bytes32, address)` | Self only | Voluntarily surrender own role |
-| `getRoleAdmin(bytes32) → bytes32` | Public (view) | Get admin role for a role |
-| `defaultAdmin() → address` | Public (view) | Current DEFAULT_ADMIN_ROLE holder |
-| `defaultAdminDelay() → uint48` | Public (view) | Transfer delay (600s for demo v0.1) |
-| `beginDefaultAdminTransfer(address)` | Admin only | Start 2-step admin transfer |
-| `acceptDefaultAdminTransfer()` | Pending admin | Accept transfer after delay elapsed |
-| `cancelDefaultAdminTransfer()` | Admin only | Cancel pending transfer |
-| `supportsInterface(bytes4) → bool` | Public (view) | ERC-165 interface detection |
-
-## Role Management Guide
-
-All examples use Foundry's `cast` CLI. Set these environment variables first:
-
-```bash
-export TREASURY=0xd6165F3aF4281037bce810621F62B43077Fb0e37
-export RPC=http://localhost:8545  # Mordor local node
+```solidity
+interface IOlympiaTreasury {
+    event Withdrawal(address indexed to, uint256 amount);
+    event Received(address indexed from, uint256 amount);
+    function executor() external view returns (address);
+    function withdraw(address payable to, uint256 amount) external;
+}
 ```
-
-### Checking Roles
-
-```bash
-# Check if an address has WITHDRAWER_ROLE
-cast call $TREASURY "hasRole(bytes32,address)(bool)" \
-  0x10dac8c06a04bec0b551627dad28bc00d6516b0caacd1c7b345fcdb5211334e4 \
-  $ADDRESS --rpc-url $RPC
-
-# Check if an address has DEFAULT_ADMIN_ROLE
-cast call $TREASURY "hasRole(bytes32,address)(bool)" \
-  0x0000000000000000000000000000000000000000000000000000000000000000 \
-  $ADDRESS --rpc-url $RPC
-```
-
-### Checking Balance
-
-```bash
-cast balance $TREASURY --ether --rpc-url $RPC
-```
-
-### Withdrawing Funds
-
-```bash
-# Withdraw 10 ETC to a recipient (requires WITHDRAWER_ROLE)
-cast send $TREASURY "withdraw(address,uint256)" \
-  $RECIPIENT $(cast to-wei 10) \
-  --private-key $PRIVATE_KEY --rpc-url $RPC --legacy
-```
-
-### Granting Roles
-
-```bash
-# Grant WITHDRAWER_ROLE to a DAO contract (requires DEFAULT_ADMIN_ROLE)
-cast send $TREASURY "grantRole(bytes32,address)" \
-  0x10dac8c06a04bec0b551627dad28bc00d6516b0caacd1c7b345fcdb5211334e4 \
-  $DAO_ADDRESS \
-  --private-key $PRIVATE_KEY --rpc-url $RPC --legacy
-```
-
-### Revoking Roles
-
-```bash
-# Revoke WITHDRAWER_ROLE from an address (requires DEFAULT_ADMIN_ROLE)
-cast send $TREASURY "revokeRole(bytes32,address)" \
-  0x10dac8c06a04bec0b551627dad28bc00d6516b0caacd1c7b345fcdb5211334e4 \
-  $OLD_WITHDRAWER \
-  --private-key $PRIVATE_KEY --rpc-url $RPC --legacy
-```
-
-### Admin Transfer (2-Step with Delay)
-
-`AccessControlDefaultAdminRules` enforces a mandatory delay between initiating and completing an admin transfer. Direct `grantRole(DEFAULT_ADMIN_ROLE)` and `revokeRole(DEFAULT_ADMIN_ROLE)` revert.
-
-```bash
-# Step 1: Begin transfer (current admin initiates)
-cast send $TREASURY "beginDefaultAdminTransfer(address)" \
-  $NEW_ADMIN \
-  --private-key $PRIVATE_KEY --rpc-url $RPC --legacy
-
-# Step 2: Wait for delay (600 seconds for demo v0.1)
-# Check pending transfer:
-cast call $TREASURY "pendingDefaultAdmin()(address,uint48)" --rpc-url $RPC
-
-# Step 3: Accept transfer (new admin completes)
-cast send $TREASURY "acceptDefaultAdminTransfer()" \
-  --private-key $NEW_ADMIN_KEY --rpc-url $RPC --legacy
-```
-
-### Governance Transition Checklist
-
-To transition from admin EOA to a DAO contract using the OZ 5.6 2-step admin transfer pattern:
-
-1. Deploy DAO contract
-2. `grantRole(WITHDRAWER_ROLE, dao)` — DAO can now withdraw
-3. Verify: `hasRole(WITHDRAWER_ROLE, dao)` returns `true`
-4. Test: DAO withdraws a small amount
-5. `revokeRole(WITHDRAWER_ROLE, admin)` — Remove admin's withdrawal rights
-6. `beginDefaultAdminTransfer(dao)` — Initiate 2-step admin transfer
-7. Wait 600 seconds (admin transfer delay)
-8. DAO calls `acceptDefaultAdminTransfer()` — **DAO is now admin.** Original admin loses all authority.
-9. Verify: `defaultAdmin()` returns DAO address
-
-> **Note:** All `cast send` commands use `--legacy` because ETC is pre-EIP-1559 until the Olympia hard fork activates. After activation, `--legacy` remains valid but Type-2 transactions also work.
-
-## Staged Governance Evolution
-
-The treasury contract is immutable — the address never changes, only role assignments evolve. This enables zero-downtime governance transitions without redeployment.
-
-### Stage 1: Bootstrap (ECIP-1111 + 1112)
-
-**Authority:** Core multisig (e.g., 3-of-5 maintainers)
-
-The multisig holds both `DEFAULT_ADMIN_ROLE` and `WITHDRAWER_ROLE`. Treasury accumulates basefee revenue immediately after hard fork activation. The multisig handles urgent operational spending — client development, security audits, node hosting infrastructure. No DAO contracts exist yet; this is the minimum viable governance.
-
-### Stage 2: DAO Handoff (+ ECIP-1113)
-
-**Authority:** CoreDAO contract replaces multisig
-
-The transition happens in two phases:
-
-- **Phase 2a — Transition period:** Multisig grants `WITHDRAWER_ROLE` to CoreDAO. Both can operate temporarily. CoreDAO begins funding core infrastructure (client maintenance, audits, public RPC hosting).
-- **Phase 2b — Full handoff:** Multisig grants `DEFAULT_ADMIN_ROLE` to CoreDAO, revokes its own `WITHDRAWER_ROLE`, then renounces `DEFAULT_ADMIN_ROLE`. This is **irreversible** — the multisig can never regain authority.
-
-After handoff, CoreDAO holds both roles. The multisig has zero authority.
-
-### Stage 3: Futarchy (+ ECIP-1117)
-
-**Authority:** CoreDAO (admin + withdrawer) + FutarchyDAO (withdrawer)
-
-CoreDAO (as admin) grants `WITHDRAWER_ROLE` to a FutarchyDAO contract that uses prediction markets for spending decisions. Both DAOs operate independently — neither blocks the other:
-
-- **CoreDAO (~60%):** Essential infrastructure — client development, audits, node hosting
-- **FutarchyDAO (~40%):** Ecosystem proposals — development grants, R&D funding, new features
-
-CoreDAO remains admin and can revoke FutarchyDAO's access if needed.
-
-### Stage 4: Miner Incentives (+ ECIP-1115)
-
-**Authority:** CoreDAO + FutarchyDAO + LCurveDistributor
-
-As [ECIP-1017](https://ecips.ethereumclassic.org/ECIPs/ecip-1017) disinflation reduces block rewards, CoreDAO enables an L-curve distributor to supplement miner income with treasury-funded distributions using logarithmic weighting (top miners receive more, with diminishing returns):
-
-- **CoreDAO (~40%):** Core infrastructure
-- **FutarchyDAO (~30%):** Ecosystem proposals
-- **LCurveDistributor (~30%):** Miner incentive payments
-
-All three are independent `WITHDRAWER_ROLE` holders.
-
-### Edge Cases
-
-**DAO Contract Migration** — When a DAO needs upgrading (e.g., OZ v5 → v6), the existing DAO (as admin) can authorize its own succession: grant roles to the new DAO, transfer `DEFAULT_ADMIN_ROLE`, then the new DAO revokes the old one's access. Zero downtime, zero fund loss, treasury address unchanged.
-
-**Legacy Transaction Adoption** — The basefee is a block-level parameter set by the protocol, not a transaction field. Legacy transactions set a single `gasPrice` which must be ≥ the block's `baseFee` — the protocol implicitly decomposes it as `effective_tip = gasPrice − baseFee`. The basefee portion (`baseFee × gasUsed`) flows to the treasury regardless of which transaction type users adopt.
-
-### Pattern: Treasury Distributor for Fixed Splits
-
-When multiple DAOs share treasury access (Stages 3-4), percentage splits can be enforced using a custom **TreasuryDistributor** contract positioned between the treasury and the DAOs. A standard PaymentSplitter (like OZ's v4 implementation) won't work here — PaymentSplitter is a passive recipient that only has `receive()` and `release()`. It cannot actively call `withdraw()` on the treasury to pull funds in.
-
-The distributor needs two capabilities: **active withdrawal** from the treasury and **proportional distribution** to payees.
-
-```
-                          drip()                         release()
-Treasury ◀──withdraw()── TreasuryDistributor ──────────▶ CoreDAO (40%)
-                         (holds WITHDRAWER_ROLE)  ─────▶ FutarchyDAO (30%)
-                         shares: [40, 30, 30]     ─────▶ LCurveDistributor (30%)
-```
-
-1. **`drip()`** — Anyone can call this. It calls `treasury.withdraw(address(this), amount)` to pull funds into the distributor. Permissionless because it only moves funds from treasury → distributor (no extraction risk).
-2. **`release(address payee)`** — Each DAO calls this to claim its proportional share. Uses pull-payment accounting: `owed = (totalReceived × payeeShares / totalShares) − alreadyReleased[payee]`.
-
-This abstracts percentage logic **outside** the treasury contract, keeping the treasury's role model clean: one `WITHDRAWER_ROLE` holder (the distributor) instead of three.
-
-> **Note:** This is a custom contract (~80 lines), not a drop-in OZ component. OpenZeppelin [removed PaymentSplitter in v5.0.0](https://github.com/OpenZeppelin/openzeppelin-contracts/pull/4276), but the [v4 PaymentSplitter](https://docs.openzeppelin.com/contracts/4.x/api/finance#PaymentSplitter) share accounting math is a useful reference for the `release()` logic.
 
 ## Deployments
 
-| Chain | Address | Block |
-|-------|---------|-------|
-| Mordor (63) | `0xd6165F3aF4281037bce810621F62B43077Fb0e37` | [Deployed](broadcast/Deploy.s.sol/63/) |
-| ETC Mainnet (61) | `0xd6165F3aF4281037bce810621F62B43077Fb0e37` | [Deployed](broadcast/Deploy.s.sol/61/) |
+### Demo v0.2 (Pre-Olympia, OZ 5.1 Governance)
 
-CREATE2 salt (`keccak256("OLYMPIA_DEMO_V0_1")`) ensures the same deterministic address on both chains given the same deployer and bytecode.
+| Chain | Address | Salt |
+|-------|---------|------|
+| Mordor (63) | TBD | `keccak256("OLYMPIA_DEMO_V0.2")` |
 
-## Setup
+### Demo v0.1 (OZ 5.6 AccessControlDefaultAdminRules)
 
-```bash
-cp .env.example .env
-# Edit .env with your wallet private key and RPC URLs
-```
+Preserved on the `demo_v0.1` branch.
+
+| Chain | Address | Salt |
+|-------|---------|------|
+| Mordor (63) | `0xd6165F3aF4281037bce810621F62B43077Fb0e37` | `keccak256("OLYMPIA_DEMO_V0_1")` |
+| ETC Mainnet (61) | `0xd6165F3aF4281037bce810621F62B43077Fb0e37` | `keccak256("OLYMPIA_DEMO_V0_1")` |
 
 ## Build & Test
 
@@ -334,10 +143,10 @@ forge build
 forge test -vv
 ```
 
-38 tests across 3 files:
-- **`OlympiaTreasury.t.sol`** — 10 unit tests: role assignment, withdrawal, revocation, events, edge cases (zero address, insufficient balance, unauthorized access)
-- **`StagedEvolution.t.sol`** — 6 integration tests: 4 governance stages (bootstrap → DAO → futarchy → L-curve) + 2 edge cases (DAO migration, legacy tx adoption). All use 2-step admin transfer pattern.
-- **`SecurityInvariants.t.sol`** — 22 security proofs: immutability (no selfdestruct, no delegatecall, no proxy), access control hardening (2-step admin transfer, delay verification, direct grant/revoke rejection), reentrancy resistance, fund safety, and fuzz tests (amounts, callers, recipients)
+33 tests across 3 files:
+- **`OlympiaTreasury.t.sol`** — 15 unit tests: constructor, withdraw (happy path, unauthorized, zero address, insufficient balance, entire balance, zero amount, fuzz), receive
+- **`SecurityInvariants.t.sol`** — 12 security proofs: bytecode checks (no SELFDESTRUCT/DELEGATECALL/CALLCODE/proxy), immutability, bytecode size <1KB, gas bound, interface compliance, reentrancy resistance, fuzz
+- **`PreGovernance.t.sol`** — 6 pre-governance tests: accumulation without executor code, non-executor reverts, executor has no code, donations tracked, cumulative balance
 
 ## Deploy
 
@@ -349,38 +158,35 @@ forge script script/Deploy.s.sol:DeployScript \
   --rpc-url $MORDOR_RPC_URL \
   --private-key $PRIVATE_KEY \
   --broadcast --legacy
-
-# ETC mainnet (--legacy required: pre-EIP-1559)
-forge script script/Deploy.s.sol:DeployScript \
-  --rpc-url $ETC_RPC_URL \
-  --private-key $PRIVATE_KEY \
-  --broadcast --legacy
 ```
-
-After deployment, update `OlympiaTreasuryAddress` in `core-geth/params/config_mordor.go` (or `config_classic.go` for mainnet).
 
 ## Project Structure
 
 | File | Description |
 |------|-------------|
-| `src/OlympiaTreasury.sol` | Treasury vault — AccessControl + withdraw + receive |
-| `test/OlympiaTreasury.t.sol` | 10 unit tests |
-| `test/StagedEvolution.t.sol` | 6 integration tests (4 governance stages + 2 edge cases) |
-| `test/SecurityInvariants.t.sol` | 22 security proofs (immutability, reentrancy, access control, 2-step admin, fuzz) |
-| `test/mocks/MockCoreDAO.sol` | Simulates ECIP-1113 traditional DAO governance |
-| `test/mocks/MockFutarchyDAO.sol` | Simulates ECIP-1117 futarchy prediction market DAO |
-| `test/mocks/MockLCurveDistributor.sol` | Simulates ECIP-1115 L-curve miner distribution |
+| `src/OlympiaTreasury.sol` | Treasury vault — immutable executor, withdraw, receive |
+| `src/interfaces/IOlympiaTreasury.sol` | ECIP-1112 interface |
+| `test/OlympiaTreasury.t.sol` | 15 unit tests |
+| `test/SecurityInvariants.t.sol` | 12 security proofs |
+| `test/PreGovernance.t.sol` | 6 pre-governance tests |
+| `test/mocks/MockExecutor.sol` | Calls treasury.withdraw() |
+| `test/mocks/ReentrantAttacker.sol` | Re-enters withdraw() in receive() |
+| `test/mocks/RejectingRecipient.sol` | Contract that rejects ETH |
 | `script/Deploy.s.sol` | CREATE2 deterministic deployment |
-| `broadcast/Deploy.s.sol/63/` | Mordor deployment logs |
 
 ## Dependencies
 
 | Package | Version |
 |---------|---------|
-| OpenZeppelin Contracts | v5.6.0 |
 | Forge Std | v1.15.0 |
 | Solidity | 0.8.28 |
 | Foundry | Latest |
+
+## Branch Strategy
+
+- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE2 salt `OLYMPIA_DEMO_V0.2`
+- **`demo_v0.1`**: OZ 5.6 AccessControlDefaultAdminRules, salt `OLYMPIA_DEMO_V0_1` (deployed Mordor + ETC mainnet)
+- **`main`**: Production (future, after Olympia activates Cancun)
 
 ## Related ECIPs
 
@@ -390,10 +196,9 @@ After deployment, update `OlympiaTreasuryAddress` in `core-geth/params/config_mo
 | [ECIP-1112](https://ecips.ethereumclassic.org/ECIPs/ecip-1112) | Olympia Treasury Contract | **This repo** |
 | [ECIP-1113](https://ecips.ethereumclassic.org/ECIPs/ecip-1113) | DAO Governance Framework | Draft |
 | [ECIP-1114](https://ecips.ethereumclassic.org/ECIPs/ecip-1114) | ECFP Funding Process | Draft |
-| [ECIP-1115](https://ecips.ethereumclassic.org/ECIPs/ecip-1115) | L-Curve Smoothing | Draft |
-| [ECIP-1116](https://ecips.ethereumclassic.org/ECIPs/ecip-1116) | Base Fee Development Funding | Draft |
-| [ECIP-1117](https://ecips.ethereumclassic.org/ECIPs/ecip-1117) | Futarchy Governance | Draft |
-| [ECIP-1118](https://ecips.ethereumclassic.org/ECIPs/ecip-1118) | Futarchy Funding & Disbursement | Draft |
 | [ECIP-1119](https://ecips.ethereumclassic.org/ECIPs/ecip-1119) | Sanctions Constraint | Draft |
 | [ECIP-1121](https://ecips.ethereumclassic.org/ECIPs/ecip-1121) | Execution Client Alignment | Implemented (3 clients) |
-| [ECIP-1122](https://ecips.ethereumclassic.org/ECIPs/ecip-1122) | Protocol-Native Miner Distribution | Draft |
+
+## License
+
+MIT
