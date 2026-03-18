@@ -161,6 +161,8 @@ contract SecurityInvariantsTest is Test {
         // Skip precompiles and system addresses (0x01-0xFF)
         vm.assume(uint160(to) > 0xFF);
         vm.assume(to.code.length == 0);
+        // Skip addresses with pre-existing balance (Foundry internal addresses)
+        vm.assume(to.balance == 0);
 
         executor.executeWithdraw(payable(to), 1 ether);
         assertEq(to.balance, 1 ether);
