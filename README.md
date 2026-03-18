@@ -41,53 +41,31 @@ Immutable treasury vault for the ETC Olympia hard fork (ECIP-1112). **Pure Solid
 └─────────────────────────────────────────────┘
 ```
 
-## The Bootstrap Problem
+## Deterministic Deployment
 
-How does the Treasury know its executor before the executor exists?
+The OlympiaExecutor's CREATE2 address is pre-computed and hardcoded as the Treasury's `immutable executor` at deployment time. Before the Executor contract is deployed, the executor address has no code and all `withdraw()` calls revert. Once the Executor is deployed to the pre-computed address, withdrawals become possible.
 
-**Answer: Pre-computed deterministic addresses.** The OlympiaExecutor's future CREATE2 address is hardcoded as the Treasury's `immutable executor` at deployment time. That address has no code initially — any call to `withdraw()` reverts because no one can call from an address with no code. Treasury accumulates passively.
+Treasury deploys via **CREATE** (`address = f(deployer, nonce)`), Executor deploys via **CREATE2** (`address = f(deployer, salt, initcodeHash)`). Both contracts have immutable constructor args pointing to each other. CREATE2 addresses depend on constructor args (part of initcode hash), so mutual CREATE2 would require solving `x = hash(..., y)` and `y = hash(..., x)` — impossible with keccak256. CREATE breaks this cycle because its address is independent of constructor args. Per ECIP-1112 §Deterministic Deployment: *"An implementation MAY use CREATE or CREATE2, but the resulting address MUST be predetermined and published in advance of deployment."*
 
-When the DAO contracts are ready (audited, testnet-validated, community-reviewed), the Executor is deployed to that exact predetermined address using CREATE2 with the published salt and bytecode. From that point, withdrawals become possible. No admin key, no setter function, no transition ceremony.
+All governance contracts use CREATE2 via the [deterministic deployer factory](https://github.com/Arachnid/deterministic-deployment-proxy) (`0x4e59b44847b379578588920cA78FbF26c0B4956C`). `PrecomputeAddresses.s.sol` in the governance repo computes all addresses for both repos.
 
-This makes the bootstrap question **verifiable rather than trust-based**: does the deployed DAO bytecode match the executor address hardcoded in the treasury? Anyone can check independently.
+## Revenue
 
-### Why CREATE for Treasury, CREATE2 for Executor?
+[ECIP-1111](https://ecips.ethereumclassic.org/ECIPs/ecip-1111) activates [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559) on Ethereum Classic. ETC redirects 100% of basefee revenue to the treasury address (Ethereum mainnet burns the basefee). Each block, the execution client's `Finalize()` function credits `baseFee × gasUsed` to the treasury contract's balance as a state credit (no on-chain transaction, no gas cost).
 
-Both contracts have immutable constructor args pointing to each other. CREATE2 addresses depend on constructor args (part of initcode hash), so if both used CREATE2 we'd need to solve `x = hash(..., y)` and `y = hash(..., x)` simultaneously — mathematically impossible with keccak256. Treasury uses CREATE (address depends only on deployer + nonce) to break this cycle. ECIP-1112 §Deterministic Deployment explicitly permits this: *"An implementation MAY use CREATE or CREATE2, but the resulting address MUST be predetermined and published in advance of deployment."*
-
-All governance contracts (including Executor) use CREATE2 via the [deterministic deployer factory](https://github.com/Arachnid/deterministic-deployment-proxy) (`0x4e59b44847b379578588920cA78FbF26c0B4956C`). The `PrecomputeAddresses.s.sol` script in the governance repo computes all addresses for both repos.
-
-## How the Treasury Works
-
-### Revenue: BaseFee State Credits
-
-The Olympia hard fork activates [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559) on Ethereum Classic. Unlike Ethereum mainnet (which burns the basefee), ETC redirects 100% of basefee revenue to the treasury address via [ECIP-1111](https://ecips.ethereumclassic.org/ECIPs/ecip-1111).
-
-Each block, core-geth's `Finalize()` function credits `baseFee × gasUsed` directly to the treasury contract's balance. This is a **state credit**, not an on-chain transaction — there is no gas cost and no transaction appears in the block.
-
-### The Contract: An Immutable Vault
-
-The treasury contract is ~30 lines of pure Solidity. It has exactly two capabilities:
-
-1. **Receive ETC** — via the `receive()` function (for direct transfers) and via state credits from the consensus layer
-2. **Withdraw ETC** — via `withdraw(to, amount)`, restricted to the single `immutable executor` address
-
-The contract embeds no governance logic, no allocation policy, no role management, and no admin functions. It is **pure custody** with a single authorized caller.
-
-The contract is **immutable**: no proxy pattern, no upgrade mechanism, no selfdestruct, no setter for the executor. The executor address is baked into the bytecode at construction time and can never change.
-
-### Why No OpenZeppelin?
+## Properties
 
 | Property | Value |
 |---|---|
 | Lines of code | ~30 |
+| OpenZeppelin dependency | None |
 | Attack surface | None |
 | Admin functions | 0 |
 | Upgrade path | None (immutable) |
-| Bytecode audit | Self-contained, trivially auditable |
-| Duplicate execution | N/A (handled by TimelockController) |
+| Bytecode audit | Self-contained |
+| Duplicate execution prevention | TimelockController (ECIP-1113) |
 
-The treasury is a dumb vault: receive ETC, send ETC to one authorized address. The executor is pre-determined — there's nothing to configure.
+Capabilities: `receive()` accepts ETC transfers and state credits. `withdraw(to, amount)` transfers ETC to the specified recipient, restricted to the single `immutable executor` address. No governance logic, no role management, no proxy pattern, no selfdestruct.
 
 ## Contract API
 
