@@ -127,14 +127,16 @@ interface IOlympiaTreasury {
 
 ## Deployments
 
-### Demo v0.2 (Pre-Olympia, OZ 5.1 Governance)
+### Demo v0.2 (Pre-Olympia, OZ 5.1 Governance) — Deployed
 
-Treasury deploys via **CREATE** (nonce-based). Governance contracts deploy via **CREATE2**.
+Treasury deployed via **CREATE** (nonce-based). Governance contracts deployed via **CREATE2**. All source code verified on Blockscout.
 
-| Chain | Treasury | Executor | Deployer Nonce |
-|-------|----------|----------|----------------|
-| Mordor (63) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | 0 |
-| ETC Mainnet (61) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | 0 |
+Deployer: `0x7C3311F29e318617fed0833E68D6522948AaE995` (fresh EOA, nonce 0)
+
+| Chain | Treasury | Executor | Blockscout |
+|-------|----------|----------|------------|
+| Mordor (63) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | [View](https://etc-mordor.blockscout.com/address/0x035b2e3c189b772e52f4c3da6c45c84a3bb871bf) |
+| ETC Mainnet (61) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | [View](https://etc.blockscout.com/address/0x035b2e3c189b772e52f4c3da6c45c84a3bb871bf) |
 
 ### Demo v0.1 (OZ 5.6 AccessControlDefaultAdminRules)
 
