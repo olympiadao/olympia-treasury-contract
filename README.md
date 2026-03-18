@@ -1,6 +1,6 @@
 # Olympia Treasury Contract
 
-Immutable treasury vault for the ETC Olympia hard fork (ECIP-1112). **Pure Solidity** — no OpenZeppelin dependency. Single authorized caller (`immutable executor`) pre-computed via CREATE2 before deployment.
+Immutable treasury vault for the ETC Olympia hard fork (ECIP-1112). **Pure Solidity** — no OpenZeppelin dependency. Single authorized caller (`immutable executor`) pre-computed before deployment.
 
 ## Overview
 
@@ -45,11 +45,17 @@ Immutable treasury vault for the ETC Olympia hard fork (ECIP-1112). **Pure Solid
 
 How does the Treasury know its executor before the executor exists?
 
-**Answer: Pre-computed CREATE2.** The OlympiaExecutor's future CREATE2 address is hardcoded as the Treasury's `immutable executor` at deployment time. That address has no code initially — any call to `withdraw()` reverts because no one can call from an address with no code. Treasury accumulates passively.
+**Answer: Pre-computed deterministic addresses.** The OlympiaExecutor's future CREATE2 address is hardcoded as the Treasury's `immutable executor` at deployment time. That address has no code initially — any call to `withdraw()` reverts because no one can call from an address with no code. Treasury accumulates passively.
 
 When the DAO contracts are ready (audited, testnet-validated, community-reviewed), the Executor is deployed to that exact predetermined address using CREATE2 with the published salt and bytecode. From that point, withdrawals become possible. No admin key, no setter function, no transition ceremony.
 
 This makes the bootstrap question **verifiable rather than trust-based**: does the deployed DAO bytecode match the executor address hardcoded in the treasury? Anyone can check independently.
+
+### Why CREATE for Treasury, CREATE2 for Executor?
+
+Both contracts have immutable constructor args pointing to each other. CREATE2 addresses depend on constructor args (part of initcode hash), so if both used CREATE2 we'd need to solve `x = hash(..., y)` and `y = hash(..., x)` simultaneously — mathematically impossible with keccak256. Treasury uses CREATE (address depends only on deployer + nonce) to break this cycle. ECIP-1112 §Deterministic Deployment explicitly permits this: *"An implementation MAY use CREATE or CREATE2, but the resulting address MUST be predetermined and published in advance of deployment."*
+
+All governance contracts (including Executor) use CREATE2 via the [deterministic deployer factory](https://github.com/Arachnid/deterministic-deployment-proxy) (`0x4e59b44847b379578588920cA78FbF26c0B4956C`). The `PrecomputeAddresses.s.sol` script in the governance repo computes all addresses for both repos.
 
 ## How the Treasury Works
 
@@ -123,9 +129,12 @@ interface IOlympiaTreasury {
 
 ### Demo v0.2 (Pre-Olympia, OZ 5.1 Governance)
 
-| Chain | Address | Salt |
-|-------|---------|------|
-| Mordor (63) | TBD | `keccak256("OLYMPIA_DEMO_V0_2")` |
+Treasury deploys via **CREATE** (nonce-based). Governance contracts deploy via **CREATE2**.
+
+| Chain | Treasury | Executor | Deployer Nonce |
+|-------|----------|----------|----------------|
+| Mordor (63) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | 0 |
+| ETC Mainnet (61) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | 0 |
 
 ### Demo v0.1 (OZ 5.6 AccessControlDefaultAdminRules)
 
@@ -172,7 +181,7 @@ forge script script/Deploy.s.sol:DeployScript \
 | `test/mocks/MockExecutor.sol` | Calls treasury.withdraw() |
 | `test/mocks/ReentrantAttacker.sol` | Re-enters withdraw() in receive() |
 | `test/mocks/RejectingRecipient.sol` | Contract that rejects ETH |
-| `script/Deploy.s.sol` | CREATE2 deterministic deployment |
+| `script/Deploy.s.sol` | CREATE deployment (nonce-based, executor pre-computed via CREATE2) |
 
 ## Dependencies
 
@@ -184,7 +193,7 @@ forge script script/Deploy.s.sol:DeployScript \
 
 ## Branch Strategy
 
-- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE2 salt `OLYMPIA_DEMO_V0_2`
+- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_2`)
 - **`demo_v0.1`**: OZ 5.6 AccessControlDefaultAdminRules, salt `OLYMPIA_DEMO_V0_1` (deployed Mordor + ETC mainnet)
 - **`main`**: Production (future, after Olympia activates Cancun)
 

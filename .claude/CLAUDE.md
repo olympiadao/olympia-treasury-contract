@@ -1,7 +1,7 @@
 # Olympia Treasury Contract
 
 ## Project Description
-ETC Olympia hard fork treasury vault (ECIP-1112). Pure Solidity, no OpenZeppelin dependency. Single authorized caller (`immutable executor`) pre-computed via CREATE2. Receives basefee revenue from EIP-1559 via state credit (ECIP-1111). Executor is the OlympiaExecutor contract from the governance suite (ECIP-1113).
+ETC Olympia hard fork treasury vault (ECIP-1112). Pure Solidity, no OpenZeppelin dependency. Single authorized caller (`immutable executor`) pre-computed deterministically. Treasury deploys via CREATE (nonce-based), Executor via CREATE2. Receives basefee revenue from EIP-1559 via state credit (ECIP-1111). Executor is the OlympiaExecutor contract from the governance suite (ECIP-1113).
 
 **Repo:** `olympiadao/olympia-treasury-contract`
 
@@ -37,19 +37,19 @@ test/PreGovernance.t.sol           # 6 pre-governance tests
 test/mocks/MockExecutor.sol        # Mock executor for testing
 test/mocks/ReentrantAttacker.sol   # Reentrancy test mock
 test/mocks/RejectingRecipient.sol  # ETH rejection test mock
-script/Deploy.s.sol                # CREATE2 deployment (salt: OLYMPIA_DEMO_V0_2)
+script/Deploy.s.sol                # CREATE deployment (executor pre-computed via CREATE2)
 ```
 
 ## Branch Strategy
 
-- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE2 salt `OLYMPIA_DEMO_V0_2`
+- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_2`)
 - **`demo_v0.1`**: OZ 5.6 AccessControlDefaultAdminRules (deployed Mordor + ETC mainnet)
 - **`main`**: Production (future, post-Olympia Cancun activation)
 
 ## Boundaries
 ### Always Do
 - Run `forge test` before committing
-- Use CREATE2 for deterministic addresses
+- Treasury uses CREATE (nonce-based), executor uses CREATE2 — see Bootstrap Problem in README
 - Keep contract minimal — governance logic goes in separate contracts
 
 ### Ask First

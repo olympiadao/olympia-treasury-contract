@@ -9,7 +9,7 @@ contract DeployScript is Script {
     // Set after running PrecomputeAddresses.s.sol in the governance repo.
     // The executor contract does not exist yet — governance deploys it later
     // at this exact CREATE2 address.
-    address constant EXECUTOR = 0x6c2E23eBac96a0fd6aC74153e2eCE24e70DFFc77;
+    address constant EXECUTOR = 0x64624f74F77639CbA268a6c8bEDC2778B707eF9a;
 
     function run() public {
         require(EXECUTOR != address(0), "Set EXECUTOR address before deploying");
