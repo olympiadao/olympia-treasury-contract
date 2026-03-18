@@ -167,6 +167,12 @@ forge script script/Deploy.s.sol:DeployScript \
 - **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_2`)
 - **`main`**: Production (future, after Olympia activates Cancun)
 
+## Related
+
+- [Olympia Governance Contracts](https://github.com/olympiadao/olympia-governance-contracts) — Governor, Executor, ECFPRegistry, SanctionsOracle, MemberNFT (ECIP-1113/1114/1119)
+- [Olympia Framework](https://github.com/olympiadao/olympia-framework) — Full specification library (11 ECIPs)
+- [Olympia App](https://github.com/olympiadao/olympia-app) — Governance dApp (Next.js 16 + wagmi)
+
 ## Related ECIPs
 
 | ECIP | Title | Status |
