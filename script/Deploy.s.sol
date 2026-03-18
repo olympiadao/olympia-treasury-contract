@@ -5,25 +5,29 @@ import {Script, console} from "forge-std/Script.sol";
 import {OlympiaTreasury} from "../src/OlympiaTreasury.sol";
 
 contract DeployScript is Script {
-    // CREATE2 salt for deterministic address (demo v0.2)
-    bytes32 constant SALT = keccak256("OLYMPIA_DEMO_V0_2");
-
     // Pre-computed OlympiaExecutor CREATE2 address (OZ 5.1 bytecode).
-    // Set after running PrecomputeAddresses.s.sol. The executor contract
-    // does not exist yet — governance deploys it later at this exact address.
-    address constant EXECUTOR = address(0); // TODO: set after PrecomputeAddresses
+    // Set after running PrecomputeAddresses.s.sol in the governance repo.
+    // The executor contract does not exist yet — governance deploys it later
+    // at this exact CREATE2 address.
+    address constant EXECUTOR = 0x6c2E23eBac96a0fd6aC74153e2eCE24e70DFFc77;
 
     function run() public {
         require(EXECUTOR != address(0), "Set EXECUTOR address before deploying");
 
         address deployer = msg.sender;
+        uint64 nonce = vm.getNonce(deployer);
         console.log("Deployer:", deployer);
-        console.log("Salt: OLYMPIA_DEMO_V0_2");
+        console.log("Nonce:", nonce);
         console.log("Executor (pre-computed):", EXECUTOR);
 
+        // Treasury uses CREATE (nonce-based), not CREATE2.
+        // This breaks the circular dependency with Executor:
+        // - Treasury address = f(deployer, nonce) — no dependency on constructor args
+        // - Executor uses CREATE2 with Treasury address as constructor arg
+        // Both addresses are pre-computed by PrecomputeAddresses.s.sol.
         vm.startBroadcast();
 
-        OlympiaTreasury treasury = new OlympiaTreasury{salt: SALT}(EXECUTOR);
+        OlympiaTreasury treasury = new OlympiaTreasury(EXECUTOR);
 
         vm.stopBroadcast();
 
@@ -32,5 +36,6 @@ contract DeployScript is Script {
         console.log("Verify:");
         console.log("  treasury.executor() == EXECUTOR");
         console.log("  Executor has NO code yet (governance not deployed)");
+        console.log("  Nonce was %d at deployment time", nonce);
     }
 }
