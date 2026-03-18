@@ -125,7 +125,7 @@ interface IOlympiaTreasury {
 
 | Chain | Address | Salt |
 |-------|---------|------|
-| Mordor (63) | TBD | `keccak256("OLYMPIA_DEMO_V0.2")` |
+| Mordor (63) | TBD | `keccak256("OLYMPIA_DEMO_V0_2")` |
 
 ### Demo v0.1 (OZ 5.6 AccessControlDefaultAdminRules)
 
@@ -184,7 +184,7 @@ forge script script/Deploy.s.sol:DeployScript \
 
 ## Branch Strategy
 
-- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE2 salt `OLYMPIA_DEMO_V0.2`
+- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE2 salt `OLYMPIA_DEMO_V0_2`
 - **`demo_v0.1`**: OZ 5.6 AccessControlDefaultAdminRules, salt `OLYMPIA_DEMO_V0_1` (deployed Mordor + ETC mainnet)
 - **`main`**: Production (future, after Olympia activates Cancun)
 

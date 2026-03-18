@@ -37,12 +37,12 @@ test/PreGovernance.t.sol           # 6 pre-governance tests
 test/mocks/MockExecutor.sol        # Mock executor for testing
 test/mocks/ReentrantAttacker.sol   # Reentrancy test mock
 test/mocks/RejectingRecipient.sol  # ETH rejection test mock
-script/Deploy.s.sol                # CREATE2 deployment (salt: OLYMPIA_DEMO_V0.2)
+script/Deploy.s.sol                # CREATE2 deployment (salt: OLYMPIA_DEMO_V0_2)
 ```
 
 ## Branch Strategy
 
-- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE2 salt `OLYMPIA_DEMO_V0.2`
+- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE2 salt `OLYMPIA_DEMO_V0_2`
 - **`demo_v0.1`**: OZ 5.6 AccessControlDefaultAdminRules (deployed Mordor + ETC mainnet)
 - **`main`**: Production (future, post-Olympia Cancun activation)
 

@@ -6,7 +6,7 @@ import {OlympiaTreasury} from "../src/OlympiaTreasury.sol";
 
 contract DeployScript is Script {
     // CREATE2 salt for deterministic address (demo v0.2)
-    bytes32 constant SALT = keccak256("OLYMPIA_DEMO_V0.2");
+    bytes32 constant SALT = keccak256("OLYMPIA_DEMO_V0_2");
 
     // Pre-computed OlympiaExecutor CREATE2 address (OZ 5.1 bytecode).
     // Set after running PrecomputeAddresses.s.sol. The executor contract
@@ -18,7 +18,7 @@ contract DeployScript is Script {
 
         address deployer = msg.sender;
         console.log("Deployer:", deployer);
-        console.log("Salt: OLYMPIA_DEMO_V0.2");
+        console.log("Salt: OLYMPIA_DEMO_V0_2");
         console.log("Executor (pre-computed):", EXECUTOR);
 
         vm.startBroadcast();
