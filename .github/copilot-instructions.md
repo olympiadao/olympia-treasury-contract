@@ -1,13 +1,13 @@
 # Olympia Treasury Contract — Copilot Instructions
 
 ## Tech Stack
-- Solidity 0.8.28, Foundry, OpenZeppelin v5.6.0
+- Solidity 0.8.28, Foundry. No external dependencies.
 - Target: ETC (PoW chain, chain IDs 61/63)
 
 ## Rules
 - All contracts use SPDX-License-Identifier: MIT
-- Use OpenZeppelin AccessControlDefaultAdminRules (v5.6) for role management with 2-step admin transfer
-- Use CREATE2 for deterministic deployment addresses
+- Pure Solidity — no OpenZeppelin, no external dependencies
+- Treasury uses CREATE (nonce-based), Executor uses CREATE2
 - Tests use Forge Test with vm.prank/vm.deal/vm.expectRevert
 - No upgradeable proxies — contracts are immutable
 
