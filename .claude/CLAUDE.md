@@ -23,7 +23,7 @@ forge snapshot       # Gas snapshots
 ## Deploy
 ```bash
 source .env
-# Mordor (--legacy required until EIP-1559 activates at block 15,800,850)
+# Mordor (--legacy required until Olympia activates EIP-1559)
 forge script script/Deploy.s.sol:DeployScript --rpc-url $MORDOR_RPC_URL --private-key $PRIVATE_KEY --broadcast --legacy
 # ETC mainnet
 forge script script/Deploy.s.sol:DeployScript --rpc-url $ETC_RPC_URL --private-key $PRIVATE_KEY --broadcast --legacy
