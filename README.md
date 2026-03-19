@@ -1,5 +1,7 @@
 # Olympia Treasury Contract
 
+> **Demo v0.2** — Olympia ECIP spec compliant. Deployed for live Mordor and ETC mainnet development testing. Pre-Olympia EVM (Shanghai). Pure Solidity, no OpenZeppelin dependency. Not production.
+
 Immutable treasury vault for the ETC Olympia hard fork (ECIP-1112). **Pure Solidity** — no OpenZeppelin dependency. Single authorized caller (`immutable executor`) pre-computed before deployment.
 
 ## Overview
