@@ -1,6 +1,9 @@
 # Olympia Treasury Contract
 
 ## Project Description
+
+> **Production** — Same contract code as demo_v0.2. Treasury bytecode is identical (pure Solidity). Production addresses differ from demo (different deployer EOA + OZ 5.6 governance bytecode). All addresses recomputed by `PrecomputeAddresses.s.sol`.
+
 ETC Olympia hard fork treasury vault (ECIP-1112). Pure Solidity, no OpenZeppelin dependency. Single authorized caller (`immutable executor`) pre-computed deterministically. Treasury deploys via CREATE (nonce-based), Executor via CREATE2. Receives basefee revenue from EIP-1559 via state credit (ECIP-1111). Executor is the OlympiaExecutor contract from the governance suite (ECIP-1113).
 
 **Repo:** `olympiadao/olympia-treasury-contract`

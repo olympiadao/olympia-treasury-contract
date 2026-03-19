@@ -1,6 +1,8 @@
 # Olympia Treasury Contract
 
-> **Demo v0.2** — Olympia ECIP spec compliant. Deployed for live Mordor and ETC mainnet development testing. Pre-Olympia EVM (Shanghai). Pure Solidity, no OpenZeppelin dependency. Not production.
+> **Production** — Olympia ECIP spec compliant. Drafted for future production deployment on Mordor and ETC mainnet. Pure Solidity, no OpenZeppelin dependency. Treasury deploys before Olympia upgrade via CREATE from a fresh deployer (hardcoded in clients). Governance deploys after Olympia hard fork via CREATE2. Same addresses on Mordor and ETC mainnet.
+>
+> **Note:** Production deployment uses a fresh deployer EOA (nonce 0), producing a different Treasury CREATE address than demo v0.2. The Executor CREATE2 address also changes (OZ 5.6 governance bytecode), which changes the executor constructor arg. Treasury bytecode is identical — pure Solidity, no OZ dependency. All addresses recomputed by `PrecomputeAddresses.s.sol` in the governance repo.
 
 Immutable treasury vault for the ETC Olympia hard fork (ECIP-1112). **Pure Solidity** — no OpenZeppelin dependency. Single authorized caller (`immutable executor`) pre-computed before deployment.
 
