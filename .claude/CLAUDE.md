@@ -1,6 +1,9 @@
 # Olympia Treasury Contract
 
 ## Project Description
+
+> **Demo v0.1** — Not Olympia ECIP spec compliant. Deployed for fast iterative development to build project scaffolding. Not for production use. See `demo_v0.2` for the spec-aligned deployment.
+
 ETC Olympia hard fork treasury vault (ECIP-1112). Built on OpenZeppelin AccessControlDefaultAdminRules (v5.6, ECIP-1113) with 2-step admin transfer and 600s delay. Receives basefee revenue from EIP-1559 via state credit (ECIP-1111) and provides role-gated withdrawal. Staged governance — admin EOA now, 2-step transfer to futarchy DAO (ECIP-1117) later.
 
 ## Tech Stack

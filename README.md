@@ -1,5 +1,7 @@
 # Olympia Treasury Contract
 
+> **Demo v0.1** — Not Olympia ECIP spec compliant. Deployed for fast iterative development to build project scaffolding. Not for production use. See `demo_v0.2` for the spec-aligned deployment.
+
 Immutable treasury vault for the ETC Olympia hard fork. Built on **OpenZeppelin Contracts v5.6.0** using **AccessControlDefaultAdminRules** — the industry-standard 2-step admin transfer pattern with configurable delay.
 
 ## Overview
@@ -334,7 +336,7 @@ forge build
 forge test -vv
 ```
 
-38 tests across 3 files:
+37 tests passing across 3 files (1 SecurityInvariants test fails — known issue, fixed in demo_v0.2):
 - **`OlympiaTreasury.t.sol`** — 10 unit tests: role assignment, withdrawal, revocation, events, edge cases (zero address, insufficient balance, unauthorized access)
 - **`StagedEvolution.t.sol`** — 6 integration tests: 4 governance stages (bootstrap → DAO → futarchy → L-curve) + 2 edge cases (DAO migration, legacy tx adoption). All use 2-step admin transfer pattern.
 - **`SecurityInvariants.t.sol`** — 22 security proofs: immutability (no selfdestruct, no delegatecall, no proxy), access control hardening (2-step admin transfer, delay verification, direct grant/revoke rejection), reentrancy resistance, fund safety, and fuzz tests (amounts, callers, recipients)
