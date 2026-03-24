@@ -5,11 +5,11 @@ import {Script, console} from "forge-std/Script.sol";
 import {OlympiaTreasury} from "../src/OlympiaTreasury.sol";
 
 contract DeployScript is Script {
-    // Pre-computed OlympiaExecutor CREATE2 address (OZ 5.1 bytecode).
+    // Pre-computed OlympiaExecutor CREATE2 address (OZ 5.1 bytecode, salt OLYMPIA_DEMO_V0_3).
     // Set after running PrecomputeAddresses.s.sol in the governance repo.
     // The executor contract does not exist yet — governance deploys it later
     // at this exact CREATE2 address.
-    address constant EXECUTOR = 0x64624f74F77639CbA268a6c8bEDC2778B707eF9a;
+    address constant EXECUTOR = 0x292eBe07d11850Dfc94Cbf9c72C3A054d23cAB54;
 
     function run() public {
         require(EXECUTOR != address(0), "Set EXECUTOR address before deploying");
@@ -31,7 +31,7 @@ contract DeployScript is Script {
 
         vm.stopBroadcast();
 
-        console.log("OlympiaTreasury (demo v0.2) deployed at:", address(treasury));
+        console.log("OlympiaTreasury (demo v0.3) deployed at:", address(treasury));
         console.log("");
         console.log("Verify:");
         console.log("  treasury.executor() == EXECUTOR");
