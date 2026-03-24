@@ -42,8 +42,9 @@ script/Deploy.s.sol                # CREATE deployment (executor pre-computed vi
 
 ## Branch Strategy
 
-- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_2`)
 - **`main`**: Production (future, post-Olympia Cancun activation)
+- **`demo_v0.3`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_3`)
+- **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_2`)
 
 ## Boundaries
 ### Always Do

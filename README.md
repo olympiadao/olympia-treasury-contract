@@ -1,6 +1,6 @@
 # Olympia Treasury Contract
 
-> **Demo v0.2** — Olympia ECIP spec compliant. Deployed for live Mordor and ETC mainnet development testing. Pre-Olympia EVM (Shanghai). Pure Solidity, no OpenZeppelin dependency. Not production.
+> **Demo v0.3** — Olympia ECIP spec compliant. Deployed for live Mordor and ETC mainnet development testing. Pre-Olympia EVM (Shanghai). Pure Solidity, no OpenZeppelin dependency. Not production.
 
 Immutable treasury vault for the ETC Olympia hard fork (ECIP-1112). **Pure Solidity** — no OpenZeppelin dependency. Single authorized caller (`immutable executor`) pre-computed before deployment.
 
@@ -107,16 +107,16 @@ interface IOlympiaTreasury {
 
 ## Deployments
 
-### Demo v0.2 (Pre-Olympia, OZ 5.1 Governance) — Deployed
+### Demo v0.3 — Deployed
 
-Treasury deployed via **CREATE** (nonce-based). Governance contracts deployed via **CREATE2**. All source code verified on Blockscout.
+Treasury deployed via **CREATE** (nonce 0). Governance contracts deployed via **CREATE2** (salt: `OLYMPIA_DEMO_V0_3`). All source code verified on Blockscout.
 
-Deployer: `0x7C3311F29e318617fed0833E68D6522948AaE995` (fresh EOA, nonce 0)
+Deployer: `0xAF21767a2c5b3acFFB64dC64CD5A876e91155bD0` (fresh EOA, nonce 0)
 
 | Chain | Treasury | Executor | Blockscout |
 |-------|----------|----------|------------|
-| Mordor (63) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | [View](https://etc-mordor.blockscout.com/address/0x035b2e3c189b772e52f4c3da6c45c84a3bb871bf) |
-| ETC Mainnet (61) | `0x035b2e3c189B772e52F4C3DA6c45c84A3bB871bf` | `0x64624f74F77639CbA268a6c8bEDC2778B707eF9a` | [View](https://etc.blockscout.com/address/0x035b2e3c189b772e52f4c3da6c45c84a3bb871bf) |
+| Mordor (63) | `0x60d0A7394f9Cd5C469f9F5Ec4F9C803F5294d79b` | `0x292eBe07d11850Dfc94Cbf9c72C3A054d23cAB54` | [View](https://etc-mordor.blockscout.com/address/0x60d0a7394f9cd5c469f9f5ec4f9c803f5294d79b) |
+| ETC Mainnet (61) | `0x60d0A7394f9Cd5C469f9F5Ec4F9C803F5294d79b` | `0x292eBe07d11850Dfc94Cbf9c72C3A054d23cAB54` | [View](https://etc.blockscout.com/address/0x60d0a7394f9cd5c469f9f5ec4f9c803f5294d79b) |
 
 ## Build & Test
 
@@ -166,9 +166,10 @@ forge script script/Deploy.s.sol:DeployScript \
 
 ## Branch Strategy
 
+- **`main`**: Production (future, after Olympia activates Cancun)
+- **`demo_v0.3`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_3`)
 - **`demo_v0.2`**: Pure Solidity, immutable executor, CREATE deployment (executor via CREATE2 salt `OLYMPIA_DEMO_V0_2`)
 - **`demo_v0.1`**: OZ 5.6, AccessControlDefaultAdminRules (CREATE2 salt `OLYMPIA_DEMO_V0_1`)
-- **`main`**: Production (future, after Olympia activates Cancun)
 
 ## Related
 
