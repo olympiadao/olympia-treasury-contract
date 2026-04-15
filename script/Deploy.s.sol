@@ -20,13 +20,22 @@ contract DeployScript is Script {
 
         address deployer = msg.sender;
         uint64 nonce = vm.getNonce(deployer);
+
+        // CRITICAL: Treasury address = keccak256(rlp(deployer, nonce)).
+        // PrecomputeAddresses.s.sol was run with DEPLOYER_NONCE=0.
+        // If nonce != 0, the treasury will land at a different address than
+        // what is baked into the executor's immutable constructor arg — the
+        // deployment will be broken and irrecoverable without redeploying all 9 contracts.
+        // Use a FRESH address that has never sent a transaction on this chain.
+        require(nonce == 0, "Deployer must be a fresh address (nonce=0). Treasury CREATE address must match precomputation.");
+
         console.log("Deployer:", deployer);
-        console.log("Nonce:", nonce);
+        console.log("Nonce:", nonce, "(confirmed 0 -- treasury address is deterministic)");
         console.log("Executor (pre-computed):", EXECUTOR);
 
         // Treasury uses CREATE (nonce-based), not CREATE2.
         // This breaks the circular dependency with Executor:
-        // - Treasury address = f(deployer, nonce) — no dependency on constructor args
+        // - Treasury address = f(deployer, nonce=0) — no dependency on constructor args
         // - Executor uses CREATE2 with Treasury address as constructor arg
         // Both addresses are pre-computed by PrecomputeAddresses.s.sol.
         vm.startBroadcast();
@@ -40,6 +49,5 @@ contract DeployScript is Script {
         console.log("Verify:");
         console.log("  treasury.executor() == EXECUTOR");
         console.log("  Executor has NO code yet (governance not deployed)");
-        console.log("  Nonce was %d at deployment time", nonce);
     }
 }
