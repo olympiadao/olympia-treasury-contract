@@ -29,10 +29,13 @@ keystore/
 wallet.json
 mnemonic.txt
 
-# Claude internal
-.claude/SESSION_NOTES.md
-.claude/reports/
-.claude/debug.log
+# Claude Code working directory (local only)
+.claude/
+CLAUDE.md
+
+# Internal development directory
+.local/
+
 SESSION_NOTES.md
 PLANNING.md
 SCRATCH.md
